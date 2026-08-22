@@ -1,0 +1,136 @@
+name: Agent - Revisor de MR
+
+# Se dispara cuando el pipeline de CI (workflow "CI", definido en ci.yml)
+# termina de correr sobre un pull request. Nunca fusiona el PR: solo
+# comenta su clasificacion (mecanico y mergeable, o requiere revision
+# humana).
+#
+# Motor: Ollama local dentro del propio runner (ver agent-documentation.yml
+# para el detalle del diseno). El system prompt vive en
+# scripts/agents/mr-reviewer.md.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  OLLAMA_MODEL: "qwen2.5-coder:7b-instruct-q4_K_M"
+
+jobs:
+  mr-review-agent:
+    name: Comentar PR tras CI
+    if: github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Resolver numero de PR
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          PR_NUMBER=$(jq -r '.workflow_run.pull_requests[0].number // empty' "$GITHUB_EVENT_PATH")
+          if [ -z "$PR_NUMBER" ]; then
+            PR_NUMBER=$(gh pr list --repo "${{ github.repository }}" --state all \
+              --head "${{ github.event.workflow_run.head_branch }}" \
+              --json number --jq '.[0].number')
+          fi
+          echo "number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Cache de modelos de Ollama
+        if: steps.pr.outputs.number != ''
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama
+          key: ollama-models-${{ runner.os }}-${{ env.OLLAMA_MODEL }}
+
+      - name: Instalar Ollama
+        if: steps.pr.outputs.number != ''
+        run: |
+          if ! command -v ollama >/dev/null 2>&1; then
+            curl -fsSL https://ollama.com/install.sh | sh
+          fi
+          ollama --version
+
+      - name: Reunir contexto del PR
+        id: gather
+        if: steps.pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          CI_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## CI_CONCLUSION: $CI_CONCLUSION"
+            echo
+            echo "## Titulo y descripcion del PR"
+            gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" \
+              --json title,body --jq '"# " + .title + "\n\n" + (.body // "(sin descripcion)")'
+            echo
+            echo "## Resumen de archivos cambiados"
+            gh pr view "$PR_NUMBER" --repo "${{ github.repository }}" --json files \
+              --jq '.files[] | "- " + .path + " (+" + (.additions|tostring) + "/-" + (.deletions|tostring) + ")"'
+            echo
+            echo "## Diff del PR"
+            gh pr diff "$PR_NUMBER" --repo "${{ github.repository }}"
+          } > "$RUNNER_TEMP/context.txt"
+          # Los diffs de PRs grandes pueden ser enormes; se trunca por
+          # seguridad para no hacer la inferencia local (CPU, sin GPU) mas
+          # lenta de lo necesario.
+          MAX_CHARS=8000
+          if [ "$(wc -c < "$RUNNER_TEMP/context.txt")" -gt "$MAX_CHARS" ]; then
+            head -c "$MAX_CHARS" "$RUNNER_TEMP/context.txt" > "$RUNNER_TEMP/context.trunc.txt"
+            printf '\n[... diff truncado por tamano; si no alcanzas a ver todo el cambio, clasifica como human_review y dilo en "reason" ...]\n' >> "$RUNNER_TEMP/context.trunc.txt"
+            mv "$RUNNER_TEMP/context.trunc.txt" "$RUNNER_TEMP/context.txt"
+          fi
+
+      - name: Ejecutar agente revisor de MR
+        id: inference
+        if: steps.pr.outputs.number != ''
+        timeout-minutes: 35
+        run: |
+          bash scripts/agents/run_ollama.sh \
+            scripts/agents/mr-reviewer.md \
+            "$RUNNER_TEMP/context.txt" \
+            "$RUNNER_TEMP/response.txt"
+          echo "response-file=$RUNNER_TEMP/response.txt" >> "$GITHUB_OUTPUT"
+
+      - name: Parsear respuesta del agente
+        id: parse
+        if: steps.pr.outputs.number != ''
+        run: |
+          python3 scripts/agents/parse_mr_response.py "${{ steps.inference.outputs.response-file }}"
+
+      - name: Comentar PR con la clasificacion
+        if: steps.pr.outputs.number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          CLASSIFICATION: ${{ steps.parse.outputs.classification }}
+          REASON: ${{ steps.parse.outputs.reason }}
+        run: |
+          set -euo pipefail
+
+          HEADER="✅ Mecánico y mergeable"
+          if [ "$CLASSIFICATION" != "mechanical_mergeable" ]; then
+            HEADER="⚠️ Requiere revisión humana"
+          fi
+
+          COMMENT_FILE="$RUNNER_TEMP/comment.md"
+          {
+            printf '**Agente revisor de MR — %s**\n\n' "$HEADER"
+            printf '%s\n\n' "$REASON"
+            echo "_Comentario generado automáticamente por scripts/agents/mr-reviewer.md. Este agente nunca fusiona el PR: la decisión final es siempre de una persona del equipo._"
+          } > "$COMMENT_FILE"
+
+          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body-file "$COMMENT_FILE"
