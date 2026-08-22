@@ -1,0 +1,177 @@
+name: Agent - Documentador
+
+# Corre semanalmente y al fusionar cambios en main, ademas de poder
+# dispararse manualmente para dejar evidencia antes de la entrega.
+#
+# Motor: Ollama local dentro del propio runner (modelo open-source,
+# qwen2.5-coder), sin costo y sin depender de una API de terceros. El
+# system prompt vive en scripts/agents/documentador.md y pide JSON en
+# texto plano; scripts/agents/run_ollama.sh instala/levanta Ollama,
+# descarga el modelo (cacheado entre corridas via actions/cache) y llama a
+# /api/generate con format=json. Este workflow ejecuta la accion
+# resultante (issue, PR mecanico, o comentario "requiere intervencion
+# humana") via scripts/agents/apply_edits.py. Nunca hace push a main
+# directamente (la proteccion de rama lo bloquearia igualmente) ni
+# fusiona un PR.
+#
+# Portado desde distri-lab-1 (Lab 1/2 del mismo curso), donde este mismo
+# diseno se uso con GitHub Models primero y luego con Ollama local (ver
+# CHANGELOG de ese repo para el detalle de por que se cambio de motor).
+on:
+  schedule:
+    - cron: "0 13 * * 1" # Lunes 13:00 UTC
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  # Mismo modelo usado en distri-lab-1: buen balance calidad/tamano para
+  # correr en CPU. Si el job se cae por timeout en el runner gratuito,
+  # bajar a qwen2.5-coder:3b -- pierde algo de calidad pero corre mas
+  # rapido.
+  OLLAMA_MODEL: "qwen2.5-coder:7b-instruct-q4_K_M"
+
+jobs:
+  documentation-agent:
+    name: Revisar documentacion
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Configurar git para commits del agente
+        run: |
+          git config user.name "docs-agent[bot]"
+          git config user.email "docs-agent@users.noreply.github.com"
+
+      - name: Cache de modelos de Ollama
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama
+          key: ollama-models-${{ runner.os }}-${{ env.OLLAMA_MODEL }}
+
+      - name: Instalar Ollama
+        run: |
+          if ! command -v ollama >/dev/null 2>&1; then
+            curl -fsSL https://ollama.com/install.sh | sh
+          fi
+          ollama --version
+
+      - name: Reunir contexto
+        id: gather
+        run: |
+          set -euo pipefail
+          {
+            echo "## Encabezados de README.md"
+            grep -n '^#' README.md || true
+            echo
+            echo "## Enlaces internos en README.md"
+            grep -noE '\[[^]]*\]\([^)]*\)' README.md || echo "(sin enlaces)"
+            echo
+            echo "## CHANGELOG.md completo"
+            echo '```markdown'
+            cat CHANGELOG.md
+            echo '```'
+            echo
+            echo "## Ultimos 15 commits"
+            git log --oneline -15
+          } > "$RUNNER_TEMP/context.txt"
+
+      - name: Ejecutar agente documentador
+        id: inference
+        timeout-minutes: 35
+        run: |
+          bash scripts/agents/run_ollama.sh \
+            scripts/agents/documentador.md \
+            "$RUNNER_TEMP/context.txt" \
+            "$RUNNER_TEMP/response.txt"
+          echo "response-file=$RUNNER_TEMP/response.txt" >> "$GITHUB_OUTPUT"
+
+      - name: Aplicar clasificacion
+        id: apply
+        run: |
+          python3 scripts/agents/apply_edits.py \
+            "${{ steps.inference.outputs.response-file }}" \
+            "CHANGELOG.md"
+
+      - name: Ejecutar accion segun clasificacion
+        env:
+          ACTION: ${{ steps.apply.outputs.action }}
+          TITLE: ${{ steps.apply.outputs.title }}
+          REASON: ${{ steps.apply.outputs.reason }}
+          ISSUE_BODY: ${{ steps.apply.outputs.issue_body }}
+          TARGET_FILE: ${{ steps.apply.outputs.target_file }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$ACTION" ] || [ "$ACTION" = "none" ]; then
+            echo "Sin hallazgos que reportar en esta ejecucion."
+            exit 0
+          fi
+
+          # Como el modelo puede volver a encontrar el mismo hallazgo en
+          # cada corrida, se limita a 1 issue abierto con label
+          # agent+documentation a la vez: si ya hay uno pendiente, no se
+          # crea otro. Evita inundar el tablero de duplicados hasta que
+          # una persona cierre el anterior.
+          OPEN_AGENT_DOC_ISSUES=$(gh issue list --repo "${{ github.repository }}" --state open --label agent \
+            --json labels --jq '[.[] | select(.labels[].name == "documentation")] | length')
+          if [ "$OPEN_AGENT_DOC_ISSUES" -gt 0 ]; then
+            echo "Ya hay $OPEN_AGENT_DOC_ISSUES issue(s) abierto(s) con label agent+documentation; se omite crear uno nuevo para evitar duplicados."
+            exit 0
+          fi
+
+          BODY_FILE="$RUNNER_TEMP/issue_body.md"
+          printf '%s\n' "$ISSUE_BODY" > "$BODY_FILE"
+
+          if [ "$ACTION" = "human_required" ]; then
+            FINAL_BODY_FILE="$RUNNER_TEMP/final_body.md"
+            {
+              printf 'Requiere intervención humana: %s\n\n' "$REASON"
+              cat "$BODY_FILE"
+            } > "$FINAL_BODY_FILE"
+            gh issue create --title "$TITLE" --body-file "$FINAL_BODY_FILE" --label "agent,documentation"
+            exit 0
+          fi
+
+          if [ "$ACTION" = "open_issue" ]; then
+            gh issue create --title "$TITLE" --body-file "$BODY_FILE" --label "agent,documentation"
+            exit 0
+          fi
+
+          if [ "$ACTION" = "open_fix_pr" ]; then
+            if [ -z "$TARGET_FILE" ] || git diff --quiet -- "$TARGET_FILE"; then
+              echo "No hay cambios aplicados sobre $TARGET_FILE; se degrada a issue."
+              gh issue create --title "$TITLE" --body-file "$BODY_FILE" --label "agent,documentation"
+              exit 0
+            fi
+
+            SLUG=$(printf '%s' "$TITLE" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed 's/-\+/-/g; s/^-//; s/-$//' | cut -c1-40)
+            BRANCH="agent/docs-${SLUG}-${GITHUB_RUN_ID}"
+
+            git checkout -b "$BRANCH"
+            git add "$TARGET_FILE"
+            git commit -m "docs(agent): $TITLE"
+            git push -u origin "$BRANCH"
+
+            ISSUE_URL=$(gh issue create --title "$TITLE" --body-file "$BODY_FILE" --label "agent,documentation")
+            ISSUE_NUM=$(basename "$ISSUE_URL")
+
+            PR_BODY_FILE="$RUNNER_TEMP/pr_body.md"
+            printf 'Fix automático propuesto por el agente documentador.\n\nCloses #%s\n' "$ISSUE_NUM" > "$PR_BODY_FILE"
+
+            gh pr create \
+              --title "docs(agent): $TITLE" \
+              --body-file "$PR_BODY_FILE" \
+              --base main \
+              --head "$BRANCH" \
+              --label "agent:auto-fix,rol-5,documentation"
+          fi

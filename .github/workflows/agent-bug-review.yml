@@ -1,0 +1,184 @@
+name: Agent - Revisor de bugs
+
+# Corre diariamente sobre main (cron), ademas de poder dispararse
+# manualmente para dejar evidencia antes de la entrega.
+#
+# Motor: Ollama local dentro del propio runner (ver agent-documentation.yml
+# para el detalle del diseno). El system prompt vive en
+# scripts/agents/bug-reviewer.md.
+#
+# Decision de diseno (independiente del motor): como este runner no
+# instala dependencias de dominio ni corre el framework real, el
+# "open_fix_pr" automatico solo se permite sobre archivos bajo tests/;
+# cualquier otro hallazgo (incluyendo flooding sin TTL/prioridad en
+# should_forward, o generadores sin seed documentada) se reporta como
+# issue o como "requiere intervencion humana", nunca como parche
+# automatico.
+#
+# Portado desde distri-lab-1: alla la heuristica de grep buscaba llamadas
+# CUDA sin CUDA_CHECK; aqui el equivalente es reenvio/publicacion de
+# mensajes sin TTL/prioridad visible (el enunciado del Lab 3 rechaza el
+# flooding ciego explicitamente) y generadores aleatorios sin seed
+# documentada (el enunciado exige reproducibilidad).
+on:
+  schedule:
+    - cron: "0 9 * * *" # Todos los dias 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  OLLAMA_MODEL: "qwen2.5-coder:7b-instruct-q4_K_M"
+
+jobs:
+  bug-review-agent:
+    name: Revisar regresiones y robustez
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Configurar git para commits del agente
+        run: |
+          git config user.name "bug-review-agent[bot]"
+          git config user.email "bug-review-agent@users.noreply.github.com"
+
+      - name: Cache de modelos de Ollama
+        uses: actions/cache@v4
+        with:
+          path: ~/.ollama
+          key: ollama-models-${{ runner.os }}-${{ env.OLLAMA_MODEL }}
+
+      - name: Instalar Ollama
+        run: |
+          if ! command -v ollama >/dev/null 2>&1; then
+            curl -fsSL https://ollama.com/install.sh | sh
+          fi
+          ollama --version
+
+      - name: Reunir contexto
+        id: gather
+        run: |
+          set -euo pipefail
+          BASE=$(git rev-parse HEAD~10 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          {
+            echo "## Ultimos 10 commits"
+            git log --oneline -10
+
+            echo
+            echo "## Resumen de cambios (diffstat, no el diff completo) desde $BASE sobre civicmesh/ y tests/"
+            git diff --stat "$BASE"..HEAD -- civicmesh/ tests/ || true
+
+            echo
+            echo "## Archivos que reenvian/publican mensajes sin mencion a TTL ni prioridad en el mismo archivo (heuristica con grep, puede tener falsos positivos)"
+            for f in $(grep -rliE 'forward|broadcast|publish|gossip' civicmesh/ 2>/dev/null || true); do
+              if ! grep -qiE 'ttl|priorit' "$f"; then
+                echo "- $f"
+              fi
+            done
+
+            echo
+            echo "## Usos de random/numpy.random sin mencion a 'seed' en el mismo archivo (heuristica con grep)"
+            for f in $(grep -rlE '\brandom\.|np\.random|numpy\.random' civicmesh/ 2>/dev/null || true); do
+              if ! grep -qi 'seed' "$f"; then
+                echo "- $f"
+              fi
+            done
+
+            echo
+            echo "## TODO/FIXME en civicmesh/ y tests/ (revisar si mencionan numero de issue)"
+            grep -rniE 'TODO|FIXME' civicmesh/ tests/ 2>/dev/null || echo "(sin menciones)"
+          } > "$RUNNER_TEMP/context.txt"
+
+      - name: Ejecutar agente revisor de bugs
+        id: inference
+        timeout-minutes: 35
+        run: |
+          bash scripts/agents/run_ollama.sh \
+            scripts/agents/bug-reviewer.md \
+            "$RUNNER_TEMP/context.txt" \
+            "$RUNNER_TEMP/response.txt"
+          echo "response-file=$RUNNER_TEMP/response.txt" >> "$GITHUB_OUTPUT"
+
+      - name: Aplicar clasificacion
+        id: apply
+        run: |
+          python3 scripts/agents/apply_edits.py \
+            "${{ steps.inference.outputs.response-file }}" \
+            "tests/"
+
+      - name: Ejecutar accion segun clasificacion
+        env:
+          ACTION: ${{ steps.apply.outputs.action }}
+          TITLE: ${{ steps.apply.outputs.title }}
+          REASON: ${{ steps.apply.outputs.reason }}
+          ISSUE_BODY: ${{ steps.apply.outputs.issue_body }}
+          TARGET_FILE: ${{ steps.apply.outputs.target_file }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$ACTION" ] || [ "$ACTION" = "none" ]; then
+            echo "Sin hallazgos que reportar en esta ejecucion."
+            exit 0
+          fi
+
+          OPEN_AGENT_BUG_ISSUES=$(gh issue list --repo "${{ github.repository }}" --state open --label agent \
+            --json labels --jq '[.[] | select(.labels[].name == "bug")] | length')
+          if [ "$OPEN_AGENT_BUG_ISSUES" -gt 0 ]; then
+            echo "Ya hay $OPEN_AGENT_BUG_ISSUES issue(s) abierto(s) con label agent+bug; se omite crear uno nuevo para evitar duplicados."
+            exit 0
+          fi
+
+          BODY_FILE="$RUNNER_TEMP/issue_body.md"
+          printf '%s\n' "$ISSUE_BODY" > "$BODY_FILE"
+
+          if [ "$ACTION" = "human_required" ]; then
+            FINAL_BODY_FILE="$RUNNER_TEMP/final_body.md"
+            {
+              printf 'Requiere intervención humana: %s\n\n' "$REASON"
+              cat "$BODY_FILE"
+            } > "$FINAL_BODY_FILE"
+            gh issue create --title "$TITLE" --body-file "$FINAL_BODY_FILE" --label "agent,bug"
+            exit 0
+          fi
+
+          if [ "$ACTION" = "open_issue" ]; then
+            gh issue create --title "$TITLE" --body-file "$BODY_FILE" --label "agent,bug"
+            exit 0
+          fi
+
+          if [ "$ACTION" = "open_fix_pr" ]; then
+            if [ -z "$TARGET_FILE" ] || git diff --quiet -- "$TARGET_FILE"; then
+              echo "No hay cambios aplicados sobre $TARGET_FILE; se degrada a issue."
+              gh issue create --title "$TITLE" --body-file "$BODY_FILE" --label "agent,bug"
+              exit 0
+            fi
+
+            SLUG=$(printf '%s' "$TITLE" | tr '[:upper:]' '[:lower:]' | tr -c 'a-z0-9' '-' | sed 's/-\+/-/g; s/^-//; s/-$//' | cut -c1-40)
+            BRANCH="agent/fix-${SLUG}-${GITHUB_RUN_ID}"
+
+            git checkout -b "$BRANCH"
+            git add "$TARGET_FILE"
+            git commit -m "fix(agent): $TITLE"
+            git push -u origin "$BRANCH"
+
+            ISSUE_URL=$(gh issue create --title "$TITLE" --body-file "$BODY_FILE" --label "agent,bug")
+            ISSUE_NUM=$(basename "$ISSUE_URL")
+
+            PR_BODY_FILE="$RUNNER_TEMP/pr_body.md"
+            printf 'Fix automático propuesto por el agente revisor de bugs.\n\nCloses #%s\n' "$ISSUE_NUM" > "$PR_BODY_FILE"
+
+            gh pr create \
+              --title "fix(agent): $TITLE" \
+              --body-file "$PR_BODY_FILE" \
+              --base main \
+              --head "$BRANCH" \
+              --label "agent:auto-fix,rol-5,bug"
+          fi

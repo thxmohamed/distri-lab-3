@@ -37,9 +37,21 @@ Chile, Semestre 1-2026.
 distri-lab-3/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml           # pytest: unitarios (obligatorio) + integración
+│       ├── ci.yml                   # pytest: unitarios (obligatorio) + integración
+│       ├── agent-documentation.yml
+│       ├── agent-bug-review.yml
+│       └── agent-mr-review.yml
 ├── civicmesh/                # Paquete del framework (Rol 1/2) y dominios (Rol 3)
 │   └── __init__.py
+├── scripts/
+│   └── agents/                # Los tres agentes de IA (ver sección Agentes de IA)
+│       ├── documentador.md
+│       ├── bug-reviewer.md
+│       ├── mr-reviewer.md
+│       ├── run_ollama.sh
+│       ├── ollama_generate.py
+│       ├── apply_edits.py
+│       └── parse_mr_response.py
 ├── tests/
 │   ├── unit/
 │   │   └── test_smoke.py
@@ -61,12 +73,71 @@ make test-unit        # solo unitarios
 make test-integration # solo integración
 ```
 
-Equivalente directo: `pytest tests/unit -q` / `pytest tests/integration -q`.
+Equivalente directo: `python -m pytest tests/unit -q` / `python -m pytest tests/integration -q`
+(con `pytest` a secas en vez de `python -m pytest`, el import del paquete `civicmesh` falla
+porque el directorio del repo no queda en `sys.path`).
+
+## Agentes de IA
+
+Igual que en `distri-lab-1` (Lab 1/2 de este mismo curso), el repo corre tres agentes en
+CI usando **[Ollama](https://ollama.com/) local, dentro del propio runner de GitHub
+Actions**, con el modelo open-source `qwen2.5-coder:7b-instruct-q4_K_M`. Es gratuito y no
+depende de ninguna API de terceros ni requiere secrets.
+
+El diseño es "el modelo responde JSON en texto plano → un script determinista valida y
+ejecuta la acción" (Ollama no es un agente autónomo con acceso a shell/archivos, es una
+llamada de inferencia):
+
+1. El workflow instala Ollama, descarga el modelo (cacheado entre corridas con
+   `actions/cache`) y reúne contexto (README/CHANGELOG, diffs recientes, diff del PR) en
+   un archivo de texto.
+2. [`scripts/agents/run_ollama.sh`](scripts/agents/run_ollama.sh) levanta `ollama serve`
+   y llama a `/api/generate` con `format: "json"`, usando el system prompt de
+   `scripts/agents/*.md` y el contexto como `prompt`.
+3. [`scripts/agents/apply_edits.py`](scripts/agents/apply_edits.py) (documentador y
+   revisor de bugs) y [`scripts/agents/parse_mr_response.py`](scripts/agents/parse_mr_response.py)
+   (revisor de MR) extraen el JSON de la respuesta de forma tolerante, y degradan de
+   forma segura (`action: none` / `classification: human_review`) si no encuentran nada
+   parseable.
+4. Un "fix mecánico" solo se aplica si el archivo está en una lista blanca y cada
+   reemplazo de texto propuesto aparece **exactamente una vez** en el archivo; si no,
+   degrada automáticamente a abrir un issue.
+
+| Agente | Workflow | Prompt | Frecuencia | Criterio mecánico (arregla solo) | Criterio humano (solo comenta/issue) |
+|---|---|---|---|---|---|
+| Documentador | [`agent-documentation.yml`](.github/workflows/agent-documentation.yml) | [`documentador.md`](scripts/agents/documentador.md) | Semanal (lunes) + al fusionar a `main` + manual | Entrada de CHANGELOG faltante en `CHANGELOG.md` | Enlaces rotos en `README.md`, o explicar decisiones de arquitectura |
+| Revisor de bugs | [`agent-bug-review.yml`](.github/workflows/agent-bug-review.yml) | [`bug-reviewer.md`](scripts/agents/bug-reviewer.md) | Diaria (cron) + manual | Fixture de test desalineado — solo si el archivo está bajo `tests/` | `should_forward` sin TTL/prioridad visible, generador sin `seed` documentada, o cualquier cambio a las fórmulas del canal objetivo/subjetivo (Sección 4.3) |
+| Revisor de MR | [`agent-mr-review.yml`](.github/workflows/agent-mr-review.yml) | [`mr-reviewer.md`](scripts/agents/mr-reviewer.md) | Al terminar el CI de cada PR (`workflow_run` sobre el workflow `CI`) | Solo docs/formato/tests/infra en verde, vinculado a un issue | Cambia protocolo (gossip, `should_forward`, TTL/fanout) o fórmulas del canal subjetivo sin issue, o CI en rojo |
+
+Reglas comunes a los tres agentes:
+
+- Nunca pushean directo a `main` (la protección de rama lo bloquearía igualmente).
+- El documentador y el revisor de bugs solo abren PRs mecánicos vía rama
+  `agent/<slug>-<run_id>` + `gh pr create`, etiquetados `agent:auto-fix`; para hallazgos
+  que requieren criterio, solo abren un issue con `Requiere intervención humana: <motivo>`.
+- El revisor de MR **nunca** ejecuta `gh pr merge`: solo comenta la clasificación del PR.
+- El documentador y el revisor de bugs se limitan a **1 issue abierto propio a la vez**
+  (label `agent`+`documentation` o `agent`+`bug`), para no inundar el tablero si el mismo
+  hallazgo (o una alucinación) se repite en corridas sucesivas.
+
+### Requisitos y límites conocidos
+
+- **Sin secrets**: no se necesita ninguna API key. Sí se necesita que
+  Settings → Actions → General → Workflow permissions tenga marcado **"Allow GitHub
+  Actions to create and approve pull requests"** — sin esto, el documentador y el revisor
+  de bugs fallan en `gh pr create` con `GitHub Actions is not permitted to create or
+  approve pull requests` cuando encuentran un fix mecánico (y degradan a issue).
+- **Sin GPU en el runner gratuito**: la inferencia corre en CPU y puede tardar varios
+  minutos por respuesta. Cada workflow le da `timeout-minutes: 35` al paso de inferencia.
+  Si el job se cae por timeout, bajar `OLLAMA_MODEL` a `qwen2.5-coder:3b`.
+- **Cache del modelo obligatorio**: sin `actions/cache` sobre `~/.ollama`, cada corrida
+  descargaría el modelo (~4-5 GB) de nuevo.
+- Para iterar más rápido, corran Ollama localmente (`ollama pull qwen2.5-coder:7b-instruct-q4_K_M`
+  + `bash scripts/agents/run_ollama.sh scripts/agents/<agente>.md <archivo-de-contexto> <salida>`)
+  antes de probar contra CI.
 
 ## Próximos pasos
 
 - Docker / Docker Compose (issue #5).
 - Scripts Slurm + convención `$CIVICMESH_RUNS/<run_id>/` (issue #5).
-- Port de los tres agentes de IA (Documentador, Revisor de bugs, Revisor de MR) desde
-  `distri-lab-1` (issue #5).
 - Framework de gossip (issue #1) y pub/sub (issue #2).
