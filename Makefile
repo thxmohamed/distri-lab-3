@@ -6,7 +6,7 @@ install:
 test: test-unit test-integration
 
 test-unit:
-	pytest tests/unit -q
+	python -m pytest tests/unit -q
 
 test-integration:
-	pytest tests/integration -q
+	python -m pytest tests/integration -q
