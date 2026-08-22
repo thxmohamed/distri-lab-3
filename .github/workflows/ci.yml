@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  unit-tests:
+    name: Unit tests (pytest)
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: make install
+
+      - name: Run unit tests
+        run: make test-unit
+
+  integration-tests:
+    name: Integration tests (pytest)
+    runs-on: ubuntu-24.04
+    needs: unit-tests
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: make install
+
+      # Hoy tests/integration/ solo tiene un placeholder (skip) porque el
+      # escenario real de 3+ peers depende de las capas de Rol 1/Rol 2
+      # (issues #1 y #2). Cuando exista codigo real, este job debera
+      # levantar `docker compose` antes de correr pytest (Seccion 7.2 del
+      # enunciado: "los de integracion deben correr en CI si el runner lo
+      # permite, p. ej. docker compose en el job").
+      - name: Run integration tests
+        run: make test-integration
