@@ -2,121 +2,328 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import logging
 
 from civicmesh.network.peer_info import PeerInfo
+from civicmesh.pubsub.message import PubSubMessage
 from civicmesh.pubsub.network_adapter import PubSubPeer
 
-logger = logging.getLogger(__name__)
 
-
-def parse_args() -> argparse.Namespace:
-    """
-    Lee los parámetros entregados por consola.
-
-    A diferencia de civicmesh.network.run_peer (que solo entiende
-    JOIN/GOSSIP), este script levanta un PubSubPeer: un peer "puro"
-    -- sin publicar nada propio -- capaz de suscribirse a tópicos y
-    reenviar mensajes de pub/sub de otros peers/publicadores según
-    should_forward (TTL, prioridad, interés). Es el proceso pensado
-    para ocupar los hosts CPU del Slurm (Sección 5.1 del enunciado) y
-    los servicios "peer" del docker-compose.
-    """
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Ejecuta un peer de CivicMesh con pub/sub (sin publicar datos propios)."
+        description=(
+            "Ejecuta un peer CivicMesh con soporte "
+            "de Gossip y Publish/Subscribe."
+        )
     )
 
-    parser.add_argument("--id", dest="peer_id", required=True, help="Identificador único del peer. Ej: peer-A")
-    parser.add_argument("--host", default="127.0.0.1", help="Host donde escuchará el peer.")
-    parser.add_argument("--port", type=int, required=True, help="Puerto TCP donde escuchará el peer.")
+    # Identidad del peer
+    parser.add_argument(
+        "--id",
+        dest="peer_id",
+        required=True,
+        help="Identificador único del peer. Ej: peer-A",
+    )
 
     parser.add_argument(
-        "--subscribe",
-        default="",
-        help="Comunas a las que suscribirse, separadas por coma. Ej: santiago,maipu",
+        "--host",
+        default="127.0.0.1",
+        help="Host donde escuchará el peer.",
     )
+
+    parser.add_argument(
+        "--port",
+        type=int,
+        required=True,
+        help="Puerto TCP donde escuchará el peer.",
+    )
+
+    # Suscripciones Pub/Sub
+    parser.add_argument(
+        "--subscribe",
+        action="append",
+        default=[],
+        metavar="TOPIC",
+        help=(
+            "Tópico geográfico al que se suscribe el peer. "
+            "Puede indicarse varias veces o separar tópicos por coma."
+        ),
+    )
+
     parser.add_argument(
         "--include-neighbors",
         action="store_true",
-        help="Además de las comunas indicadas, suscribirse a sus vecinas geográficas.",
+        help=(
+            "Además de los tópicos indicados, incluye "
+            "sus vecinos geográficos cuando exista "
+            "una configuración de geografía disponible."
+        ),
     )
 
-    parser.add_argument("--max-view-size", type=int, default=10, help="Tamaño máximo de la vista parcial de membresía.")
-    parser.add_argument("--fanout", type=int, default=2, help="Cantidad de peers seleccionados por ronda Gossip.")
-    parser.add_argument("--gossip-interval", type=float, default=3.0, help="Intervalo entre rondas Gossip en segundos.")
-    parser.add_argument("--random-seed", type=int, default=None, help="Seed para selección reproducible de peers.")
-    parser.add_argument("--failure-timeout", type=float, default=10.0, help="Segundos sin contacto antes de marcar un peer como dead.")
-    parser.add_argument("--failure-check-interval", type=float, default=2.0, help="Cada cuántos segundos se revisan los timeouts.")
-    parser.add_argument("--connection-timeout", type=float, default=5.0, help="Timeout de conexiones TCP.")
+    # Membresía
+    parser.add_argument(
+        "--max-view-size",
+        type=int,
+        default=10,
+        help=(
+            "Cantidad máxima de peers almacenados "
+            "en la vista parcial de membresía."
+        ),
+    )
 
-    parser.add_argument("--seed-id", default=None, help="ID del peer seed.")
-    parser.add_argument("--seed-host", default=None, help="Host del peer seed.")
-    parser.add_argument("--seed-port", type=int, default=None, help="Puerto del peer seed.")
+    # Gossip
+    parser.add_argument(
+        "--fanout",
+        type=int,
+        default=2,
+        help="Cantidad de peers seleccionados por ronda Gossip.",
+    )
 
-    return parser.parse_args()
+    parser.add_argument(
+        "--gossip-interval",
+        type=float,
+        default=3.0,
+        help="Intervalo entre rondas Gossip en segundos.",
+    )
+
+    parser.add_argument(
+        "--random-seed",
+        type=int,
+        default=None,
+        help="Seed para selección reproducible de peers.",
+    )
+
+    # Failure detector
+    parser.add_argument(
+        "--failure-timeout",
+        type=float,
+        default=10.0,
+        help=(
+            "Segundos sin contacto antes de marcar "
+            "un peer como dead."
+        ),
+    )
+
+    parser.add_argument(
+        "--failure-check-interval",
+        type=float,
+        default=2.0,
+        help=(
+            "Cada cuántos segundos se revisan "
+            "los timeouts."
+        ),
+    )
+
+    # Red
+    parser.add_argument(
+        "--connection-timeout",
+        type=float,
+        default=5.0,
+        help="Timeout de conexiones TCP.",
+    )
+
+    # Seed / Bootstrap
+    parser.add_argument(
+        "--seed-id",
+        default=None,
+        help="ID del peer seed.",
+    )
+
+    parser.add_argument(
+        "--seed-host",
+        default=None,
+        help="Host del peer seed.",
+    )
+
+    parser.add_argument(
+        "--seed-port",
+        type=int,
+        default=None,
+        help="Puerto del peer seed.",
+    )
+
+    return parser
 
 
-def validate_seed_args(args: argparse.Namespace) -> None:
-    seed_values = [args.seed_id, args.seed_host, args.seed_port]
-    supplied = [value is not None for value in seed_values]
+def parse_args() -> argparse.Namespace:
+    return build_parser().parse_args()
+
+
+def validate_seed_args(
+    args: argparse.Namespace,
+) -> None:
+    seed_values = [
+        args.seed_id,
+        args.seed_host,
+        args.seed_port,
+    ]
+
+    supplied = [
+        value is not None
+        for value in seed_values
+    ]
 
     if any(supplied) and not all(supplied):
-        raise ValueError("Para utilizar un seed debes indicar --seed-id, --seed-host y --seed-port.")
+        raise ValueError(
+            "Para utilizar un seed debes indicar "
+            "--seed-id, --seed-host y --seed-port."
+        )
 
 
-def on_message(message) -> None:
+def build_delivery_function(
+    peer_id: str,
+):
     """
-    Estado agregado local minimo: por ahora solo deja constancia en el
-    log de cada mensaje entregado (topic/canal/origen/hop_count). El
-    Rol 4 (Analitica) puede reemplazar esto por la agregacion real que
-    alimenta metrics/ (Seccion 3.4/5.4 del enunciado).
+    Entrega local por defecto.
+
+    Registra como JSON los mensajes Pub/Sub entregados
+    al peer. La capa de analítica puede reemplazar
+    posteriormente este callback.
     """
 
-    logger.info(
-        "PUBSUB entregado: topic=%s canal=%s origen=%s hop_count=%s payload=%s",
-        message.topic,
-        message.channel,
-        message.origin,
-        message.hop_count,
-        message.payload,
-    )
+    def deliver(message: PubSubMessage) -> None:
+        event = {
+            "peer_id": peer_id,
+            "message_id": message.message_id,
+            "topic": message.topic,
+            "channel": message.channel,
+            "payload": message.payload,
+            "origin": message.origin,
+            "ttl": message.ttl,
+            "hop_count": message.hop_count,
+        }
+
+        print(
+            json.dumps(
+                event,
+                ensure_ascii=False,
+            ),
+            flush=True,
+        )
+
+    return deliver
 
 
-async def run_peer(args: argparse.Namespace) -> None:
-    validate_seed_args(args)
-
-    peer = PubSubPeer(
+def build_peer(
+    args: argparse.Namespace,
+) -> PubSubPeer:
+    return PubSubPeer(
         peer_id=args.peer_id,
         host=args.host,
         port=args.port,
-        delivery_function=on_message,
+        delivery_function=build_delivery_function(
+            args.peer_id
+        ),
+
+        # Vista parcial
         max_view_size=args.max_view_size,
+
+        # Gossip
         fanout=args.fanout,
         gossip_interval=args.gossip_interval,
         random_seed=args.random_seed,
+
+        # Red
         connection_timeout=args.connection_timeout,
+
+        # Failure detector
         failure_timeout=args.failure_timeout,
-        failure_check_interval=args.failure_check_interval,
+        failure_check_interval=(
+            args.failure_check_interval
+        ),
     )
 
+
+def get_topics(
+    subscriptions: list[str],
+) -> list[str]:
+    """
+    Normaliza las suscripciones indicadas por CLI.
+
+    Permite:
+      --subscribe santiago
+      --subscribe maipu
+
+    y también:
+      --subscribe santiago,maipu
+    """
+
+    topics: list[str] = []
+
+    for subscription in subscriptions:
+        topics.extend(
+            topic.strip()
+            for topic in subscription.split(",")
+            if topic.strip()
+        )
+
+    return topics
+
+
+async def run_peer(
+    args: argparse.Namespace,
+) -> None:
+    validate_seed_args(args)
+
+    peer = build_peer(args)
+
     try:
+        # 1. Levantar TCP + Gossip + Failure Detector
         await peer.start()
 
+        # 2. Registrar suscripciones Pub/Sub
+        topics = get_topics(args.subscribe)
+
+        for topic in topics:
+            peer.pubsub.subscribe(
+                topic,
+                include_neighbors=args.include_neighbors,
+            )
+
+        # 3. Bootstrap contra seed
         if args.seed_id is not None:
-            seed = PeerInfo(peer_id=args.seed_id, host=args.seed_host, port=args.seed_port)
+            seed = PeerInfo(
+                peer_id=args.seed_id,
+                host=args.seed_host,
+                port=args.seed_port,
+            )
+
             await peer.join(seed)
 
-        topics = [topic.strip() for topic in args.subscribe.split(",") if topic.strip()]
-        for topic in topics:
-            peer.pubsub.subscribe(topic, include_neighbors=args.include_neighbors)
+        # 4. Mostrar configuración
+        subscriptions = (
+            peer.pubsub.subscriptions.get_subscriptions()
+        )
 
         print(
-            f"[{args.peer_id}] fanout={args.fanout}, gossip_interval={args.gossip_interval}s, "
-            f"failure_timeout={args.failure_timeout}s, suscrito_a={topics or '(nada)'}"
+            f"[{args.peer_id}] "
+            f"PubSubPeer iniciado en "
+            f"{args.host}:{args.port}"
         )
-        print(f"[{args.peer_id}] Presiona Ctrl+C para detener.")
 
+        print(
+            f"[{args.peer_id}] "
+            f"suscripciones="
+            f"{sorted(subscriptions)}"
+        )
+
+        print(
+            f"[{args.peer_id}] "
+            f"include_neighbors="
+            f"{args.include_neighbors}, "
+            f"max_view_size={args.max_view_size}, "
+            f"gossip_fanout={args.fanout}, "
+            f"gossip_interval="
+            f"{args.gossip_interval}s"
+        )
+
+        print(
+            f"[{args.peer_id}] "
+            "Presiona Ctrl+C para detener."
+        )
+
+        # 5. Mantener el peer vivo
         await asyncio.Event().wait()
 
     finally:
@@ -126,19 +333,34 @@ async def run_peer(args: argparse.Namespace) -> None:
 def main() -> None:
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(message)s",
+        format=(
+            "%(asctime)s | "
+            "%(levelname)s | "
+            "%(message)s"
+        ),
     )
 
     args = parse_args()
 
     try:
-        asyncio.run(run_peer(args))
+        asyncio.run(
+            run_peer(args)
+        )
+
     except KeyboardInterrupt:
-        print("\nPeer detenido por el usuario.")
+        print(
+            "\nPubSubPeer detenido por el usuario."
+        )
+
     except ValueError as error:
-        print(f"Error de configuración: {error}")
+        print(
+            f"Error de configuración: {error}"
+        )
+
     except ConnectionError as error:
-        print(f"Error de conexión: {error}")
+        print(
+            f"Error de conexión: {error}"
+        )
 
 
 if __name__ == "__main__":
