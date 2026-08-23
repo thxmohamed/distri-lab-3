@@ -10,9 +10,6 @@ from civicmesh.pubsub.message import PubSubMessage
 from civicmesh.pubsub.network_adapter import PubSubPeer
 
 
-logger = logging.getLogger(__name__)
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -21,10 +18,7 @@ def build_parser() -> argparse.ArgumentParser:
         )
     )
 
-    # ---------------------------------------------------------
     # Identidad del peer
-    # ---------------------------------------------------------
-
     parser.add_argument(
         "--id",
         dest="peer_id",
@@ -45,10 +39,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Puerto TCP donde escuchará el peer.",
     )
 
-    # ---------------------------------------------------------
     # Suscripciones Pub/Sub
-    # ---------------------------------------------------------
-
     parser.add_argument(
         "--subscribe",
         action="append",
@@ -56,14 +47,21 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="TOPIC",
         help=(
             "Tópico geográfico al que se suscribe el peer. "
-            "Puede indicarse varias veces."
+            "Puede indicarse varias veces o separar tópicos por coma."
         ),
     )
 
-    # ---------------------------------------------------------
-    # Membresía
-    # ---------------------------------------------------------
+    parser.add_argument(
+        "--include-neighbors",
+        action="store_true",
+        help=(
+            "Además de los tópicos indicados, incluye "
+            "sus vecinos geográficos cuando exista "
+            "una configuración de geografía disponible."
+        ),
+    )
 
+    # Membresía
     parser.add_argument(
         "--max-view-size",
         type=int,
@@ -74,10 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
-    # ---------------------------------------------------------
     # Gossip
-    # ---------------------------------------------------------
-
     parser.add_argument(
         "--fanout",
         type=int,
@@ -99,10 +94,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Seed para selección reproducible de peers.",
     )
 
-    # ---------------------------------------------------------
     # Failure detector
-    # ---------------------------------------------------------
-
     parser.add_argument(
         "--failure-timeout",
         type=float,
@@ -123,10 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
-    # ---------------------------------------------------------
     # Red
-    # ---------------------------------------------------------
-
     parser.add_argument(
         "--connection-timeout",
         type=float,
@@ -134,10 +123,7 @@ def build_parser() -> argparse.ArgumentParser:
         help="Timeout de conexiones TCP.",
     )
 
-    # ---------------------------------------------------------
     # Seed / Bootstrap
-    # ---------------------------------------------------------
-
     parser.add_argument(
         "--seed-id",
         default=None,
@@ -191,9 +177,9 @@ def build_delivery_function(
     """
     Entrega local por defecto.
 
-    Por ahora registra el mensaje recibido.
-    Los dominios y la capa analítica pueden utilizar
-    posteriormente su propio callback.
+    Registra como JSON los mensajes Pub/Sub entregados
+    al peer. La capa de analítica puede reemplazar
+    posteriormente este callback.
     """
 
     def deliver(message: PubSubMessage) -> None:
@@ -249,6 +235,32 @@ def build_peer(
     )
 
 
+def get_topics(
+    subscriptions: list[str],
+) -> list[str]:
+    """
+    Normaliza las suscripciones indicadas por CLI.
+
+    Permite:
+      --subscribe santiago
+      --subscribe maipu
+
+    y también:
+      --subscribe santiago,maipu
+    """
+
+    topics: list[str] = []
+
+    for subscription in subscriptions:
+        topics.extend(
+            topic.strip()
+            for topic in subscription.split(",")
+            if topic.strip()
+        )
+
+    return topics
+
+
 async def run_peer(
     args: argparse.Namespace,
 ) -> None:
@@ -257,23 +269,19 @@ async def run_peer(
     peer = build_peer(args)
 
     try:
-        # -----------------------------------------------------
         # 1. Levantar TCP + Gossip + Failure Detector
-        # -----------------------------------------------------
-
         await peer.start()
 
-        # -----------------------------------------------------
         # 2. Registrar suscripciones Pub/Sub
-        # -----------------------------------------------------
+        topics = get_topics(args.subscribe)
 
-        for topic in args.subscribe:
-            peer.pubsub.subscribe(topic)
+        for topic in topics:
+            peer.pubsub.subscribe(
+                topic,
+                include_neighbors=args.include_neighbors,
+            )
 
-        # -----------------------------------------------------
-        # 3. Bootstrap contra seed, si corresponde
-        # -----------------------------------------------------
-
+        # 3. Bootstrap contra seed
         if args.seed_id is not None:
             seed = PeerInfo(
                 peer_id=args.seed_id,
@@ -283,10 +291,7 @@ async def run_peer(
 
             await peer.join(seed)
 
-        # -----------------------------------------------------
         # 4. Mostrar configuración
-        # -----------------------------------------------------
-
         subscriptions = (
             peer.pubsub.subscriptions.get_subscriptions()
         )
@@ -305,6 +310,8 @@ async def run_peer(
 
         print(
             f"[{args.peer_id}] "
+            f"include_neighbors="
+            f"{args.include_neighbors}, "
             f"max_view_size={args.max_view_size}, "
             f"gossip_fanout={args.fanout}, "
             f"gossip_interval="
@@ -316,10 +323,7 @@ async def run_peer(
             "Presiona Ctrl+C para detener."
         )
 
-        # -----------------------------------------------------
         # 5. Mantener el peer vivo
-        # -----------------------------------------------------
-
         await asyncio.Event().wait()
 
     finally:
