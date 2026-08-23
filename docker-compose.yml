@@ -1,0 +1,101 @@
+# Levanta una malla mínima de CivicMesh: 3 peers (gossip + pub/sub) +
+# publicador(es) de dominio, sobre una red interna de Docker (Sección
+# 7.2 del enunciado: "≥3 peers + ≥1 publicador").
+#
+# Uso:
+#   docker compose up --build                 # 3 peers + publicador de delitos (Dominio A)
+#   docker compose --profile air up --build    # además, publicador de aire (Dominio B)
+#
+# Topología: peer-2 y peer-3 hacen JOIN contra peer-seed (1 seed, Sección
+# 5.3). Los publicadores también se conectan a peer-seed; sus mensajes se
+# reenvían al resto de los peers vía should_forward (TTL/prioridad/fanout
+# de civicmesh/pubsub), no por conexión directa.
+#
+# --host de cada servicio es a la vez la dirección donde escucha (asyncio
+# server) y la que se anuncia a otros peers (civicmesh/network/peer.py) --
+# por eso usamos el nombre del servicio de Compose en vez de 0.0.0.0: en
+# la red interna de Docker, el nombre del servicio ya resuelve a la propia
+# IP del contenedor.
+services:
+  peer-seed:
+    build: .
+    image: civicmesh:local
+    container_name: civicmesh-peer-seed
+    command: >
+      python -m civicmesh.pubsub.run_peer
+      --id peer-seed --host peer-seed --port 6001
+      --subscribe estacion-central,santiago,maipu
+    healthcheck:
+      # OJO: no usar 'localhost' aquí -- el peer se bindea a la IP que
+      # resuelve su propio nombre de servicio (ver nota de --host más
+      # arriba), no a loopback, así que el healthcheck debe apuntar al
+      # mismo nombre.
+      test: ["CMD", "python", "-c", "import socket; socket.create_connection(('peer-seed', 6001), timeout=2)"]
+      interval: 2s
+      timeout: 2s
+      retries: 15
+      start_period: 2s
+    networks: [civicmesh]
+
+  peer-2:
+    image: civicmesh:local
+    container_name: civicmesh-peer-2
+    depends_on:
+      peer-seed:
+        condition: service_healthy
+    command: >
+      python -m civicmesh.pubsub.run_peer
+      --id peer-2 --host peer-2 --port 6001
+      --seed-id peer-seed --seed-host peer-seed --seed-port 6001
+      --subscribe estacion-central,santiago,maipu
+    networks: [civicmesh]
+
+  peer-3:
+    image: civicmesh:local
+    container_name: civicmesh-peer-3
+    depends_on:
+      peer-seed:
+        condition: service_healthy
+    command: >
+      python -m civicmesh.pubsub.run_peer
+      --id peer-3 --host peer-3 --port 6001
+      --seed-id peer-seed --seed-host peer-seed --seed-port 6001
+      --subscribe estacion-central,santiago,maipu
+    networks: [civicmesh]
+
+  publisher-crime:
+    image: civicmesh:local
+    container_name: civicmesh-publisher-crime
+    depends_on:
+      peer-seed:
+        condition: service_healthy
+    command: >
+      python -m civicmesh.domains.run_publisher
+      --domain crime --commune estacion-central
+      --id publisher-crime --host publisher-crime --port 6001
+      --seed-id peer-seed --seed-host peer-seed --seed-port 6001
+      --interval 2
+    networks: [civicmesh]
+
+  # Dominio B (calidad del aire). No corre por defecto: se necesita el
+  # dataset cacheado (data/air_quality/open_meteo.csv, ya presente) y es
+  # el segundo "perfil" que sugiere la Sección 4 del enunciado en vez de
+  # mezclar ambos dominios en la misma corrida.
+  publisher-air:
+    image: civicmesh:local
+    container_name: civicmesh-publisher-air
+    profiles: ["air"]
+    depends_on:
+      peer-seed:
+        condition: service_healthy
+    command: >
+      python -m civicmesh.domains.run_publisher
+      --domain air --commune santiago --pollutant pm2_5
+      --id publisher-air --host publisher-air --port 6001
+      --seed-id peer-seed --seed-host peer-seed --seed-port 6001
+      --interval 2
+    networks: [civicmesh]
+
+networks:
+  civicmesh:
+    driver: bridge

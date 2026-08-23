@@ -41,22 +41,30 @@ distri-lab-3/
 │       ├── agent-documentation.yml
 │       ├── agent-bug-review.yml
 │       └── agent-mr-review.yml
-├── civicmesh/                # Paquete del framework (Rol 1/2) y dominios (Rol 3)
-│   └── __init__.py
+├── civicmesh/
+│   ├── network/            # Rol 1: membresía/gossip (Peer, Membership, FailureDetector)
+│   │   ├── peer.py         #   entiende JOIN/GOSSIP únicamente
+│   │   └── run_peer.py     #   CLI: peer solo-gossip (no relay de pub/sub)
+│   ├── pubsub/              # Rol 2: tópicos, should_forward, TTL/prioridad/fanout
+│   │   ├── network_adapter.py  # PubSubPeer(Peer): agrega manejo de mensajes PUBSUB
+│   │   └── run_peer.py         # CLI: peer con pub/sub -- el que usa docker-compose/Slurm
+│   └── domains/             # Rol 3: generadores + replay (Sección 4.3)
+│       ├── crime.py / air_quality.py / rumors.py
+│       └── run_publisher.py    # CLI: publicador de un dominio en una comuna
+├── config/
+│   ├── domains.yaml         # seed, tasas de delitos, params de percepción, comunas
+│   └── pubsub.yaml          # TTL/prioridad/fanout por canal (objetivo/subjetivo)
+├── data/air_quality/         # dataset de Open-Meteo cacheado (Apéndice A)
 ├── scripts/
-│   └── agents/                # Los tres agentes de IA (ver sección Agentes de IA)
-│       ├── documentador.md
-│       ├── bug-reviewer.md
-│       ├── mr-reviewer.md
-│       ├── run_ollama.sh
-│       ├── ollama_generate.py
-│       ├── apply_edits.py
-│       └── parse_mr_response.py
+│   ├── agents/                # Los tres agentes de IA (ver sección Agentes de IA)
+│   │   ├── documentador.md / bug-reviewer.md / mr-reviewer.md
+│   │   └── run_ollama.sh / ollama_generate.py / apply_edits.py / parse_mr_response.py
+│   └── data/download_open_meteo.py
 ├── tests/
 │   ├── unit/
-│   │   └── test_smoke.py
 │   └── integration/
-│       └── test_placeholder.py   # placeholder hasta que exista la malla real
+├── Dockerfile
+├── docker-compose.yml       # ≥3 peers + publicador(es) sobre una red interna
 ├── requirements.txt
 ├── pytest.ini
 ├── Makefile
@@ -76,6 +84,28 @@ make test-integration # solo integración
 Equivalente directo: `python -m pytest tests/unit -q` / `python -m pytest tests/integration -q`
 (con `pytest` a secas en vez de `python -m pytest`, el import del paquete `civicmesh` falla
 porque el directorio del repo no queda en `sys.path`).
+
+## Docker / Docker Compose
+
+```bash
+docker compose up --build              # 3 peers + publicador de delitos (Dominio A)
+docker compose --profile air up --build # además, publicador de aire (Dominio B)
+docker compose down                    # o --profile air down si se levantó con ese perfil
+```
+
+Levanta `peer-seed` (bootstrap), `peer-2` y `peer-3` (hacen `JOIN` contra `peer-seed`) y
+`publisher-crime` (comuna `estacion-central`). Los peers **no** están conectados
+directamente entre sí más que a través del seed: los mensajes de `publisher-crime` se
+propagan al resto vía `should_forward` (TTL/prioridad/fanout de `civicmesh/pubsub`), no
+por conexión directa — se puede confirmar en los logs (`docker compose logs peer-2`)
+porque los mensajes que no vinieron del seed llegan con `hop_count=2`.
+
+> **Nota de diseño**: `civicmesh.network.run_peer` (Rol 1) solo entiende mensajes
+> `JOIN`/`GOSSIP` -- no reenvía pub/sub. El proceso que corre en Compose/Slurm como
+> "peer" es `civicmesh.pubsub.run_peer`, que instancia `PubSubPeer` (Rol 1 + Rol 2
+> integrados). Se agregó como CLI nuevo porque antes solo `run_publisher.py` instanciaba
+> `PubSubPeer`, y no existía forma de levantar un peer "puro" (sin publicar nada) que
+> igual pudiera suscribirse y reenviar.
 
 ## Agentes de IA
 
@@ -138,6 +168,5 @@ Reglas comunes a los tres agentes:
 
 ## Próximos pasos
 
-- Docker / Docker Compose (issue #5).
 - Scripts Slurm + convención `$CIVICMESH_RUNS/<run_id>/` (issue #5).
-- Framework de gossip (issue #1) y pub/sub (issue #2).
+- Frontend de métricas y experimento de caída/partición (issue #4).

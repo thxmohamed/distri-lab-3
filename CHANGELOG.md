@@ -9,6 +9,17 @@ proyecto usa [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Added
 
+- `Dockerfile` + `docker-compose.yml`: levanta 3 peers (`peer-seed`, `peer-2`, `peer-3`)
+  y `publisher-crime` (Dominio A) sobre una red interna; perfil `air` agrega
+  `publisher-air` (Dominio B). Verificado en local con `docker compose up --build`:
+  se observó reenvío multi-hop real (`hop_count=2` en peer-2) entre peers no
+  conectados directamente.
+- `civicmesh/pubsub/run_peer.py`: CLI nuevo para levantar un peer con pub/sub
+  (`PubSubPeer`) sin publicar nada propio. Antes solo existía
+  `civicmesh/network/run_peer.py` (que solo entiende JOIN/GOSSIP, no reenvía
+  pub/sub) y `civicmesh/domains/run_publisher.py` (que exige `--domain`); no había
+  forma de levantar un peer "puro" para Compose/Slurm.
+
 - Estructura inicial del proyecto: paquete `civicmesh/`, `tests/unit/`, `tests/integration/`.
 - Pipeline de CI (`ci.yml`) con `pytest`: unitarios obligatorios, integración como
   placeholder hasta que existan las capas de gossip/pub-sub (issues #1, #2).
