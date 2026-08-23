@@ -12,6 +12,7 @@ from civicmesh.pubsub.message import PubSubMessage
 from civicmesh.pubsub.router import PubSubRouter
 from civicmesh.pubsub.subscriptions import SubscriptionManager
 from civicmesh.pubsub.metrics import PubSubMetrics
+from civicmesh.pubsub.network_adapter import PubSubPeer
 
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     "select_forward_targets",
     "should_forward",
     "PubSubMetrics",
+    "PubSubPeer",
 ]
