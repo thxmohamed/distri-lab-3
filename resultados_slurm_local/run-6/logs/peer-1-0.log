@@ -1,0 +1,16 @@
+[peer-1-0] esperando a peer-0-0 en /home/mohamed/civicmesh-runs/6/hostfile.txt...
+2026-08-24 16:49:08,852 | INFO | [peer-1-0] Peer iniciado en mohamed:6011
+2026-08-24 16:49:08,854 | INFO | [peer-1-0] Nuevo contacto directo: peer-0-0 (mohamed:6001)
+2026-08-24 16:49:08,854 | INFO | [peer-1-0] JOIN enviado a peer-0-0
+2026-08-24 16:49:11,856 | INFO | [peer-1-0] Peer descubierto indirectamente: peer-1-1 (mohamed:6012)
+2026-08-24 16:49:11,857 | INFO | [peer-1-0] Peer descubierto indirectamente: peer-0-1 (mohamed:6002)
+2026-08-24 16:49:11,857 | INFO | [peer-1-0] Peer descubierto indirectamente: publisher-air (mohamed:7002)
+2026-08-24 16:49:11,857 | INFO | [peer-1-0] Peer descubierto indirectamente: publisher-crime (mohamed:7001)
+2026-08-24 16:49:12,739 | INFO | [peer-1-0] Peer peer-0-1 confirmado como ALIVE
+2026-08-24 16:49:13,662 | INFO | [peer-1-0] Peer publisher-air confirmado como ALIVE
+2026-08-24 16:49:13,687 | INFO | [peer-1-0] Peer publisher-crime confirmado como ALIVE
+2026-08-24 16:49:14,733 | INFO | [peer-1-0] Peer peer-1-1 confirmado como ALIVE
+2026-08-24 16:49:32,972 | WARNING | [peer-1-0] Peer publisher-air marcado como DEAD por timeout (10.24s sin contacto)
+srun: Job step aborted: Waiting up to 32 seconds for job step to finish.
+slurmstepd-cpu-node-02: error: *** STEP 6.3 ON cpu-node-02 CANCELLED AT 2026-08-24T16:52:20 ***
+srun: error: cpu-node-02: task 0: Killed

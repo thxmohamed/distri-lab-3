@@ -1,0 +1,13 @@
+[frontend] levantando en mohamed:8501 (RUN_ID=6)
+
+Collecting usage statistics. To deactivate, set browser.gatherUsageStats to false.
+
+2026-08-24 16:49:11.786 Uvicorn server started on 0.0.0.0:8501
+
+  You can now view your Streamlit app in your browser.
+
+  Local URL: http://localhost:8501
+  Network URL: http://172.20.169.213:8501
+  External URL: http://179.60.77.171:8501
+
+  Detected WSL. Using poll-based file watching for better compatibility. To force watchdog, set server.fileWatcherType = "watchdog".

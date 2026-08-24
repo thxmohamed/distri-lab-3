@@ -1,0 +1,3 @@
+Esperando el hostfile de peers.sbatch en /home/mohamed/civicmesh-runs/6/hostfile.txt (RUN_ID=6)...
+Seed encontrado: mohamed:6001
+Nodos asignados: gpu-node-01 gpu-node-02

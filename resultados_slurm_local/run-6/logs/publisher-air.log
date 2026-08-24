@@ -1,0 +1,25 @@
+[publisher-air] mohamed:7002, comuna=santiago, seed=mohamed:6001
+2026-08-24 16:49:10,657 | INFO | [publisher-air] Peer iniciado en mohamed:7002
+2026-08-24 16:49:10,658 | INFO | [publisher-air] Nuevo contacto directo: peer-0-0 (mohamed:6001)
+2026-08-24 16:49:10,659 | INFO | [publisher-air] JOIN enviado a peer-0-0
+2026-08-24 16:49:12,734 | INFO | [publisher-air] Nuevo contacto directo: peer-1-0 (mohamed:6011)
+2026-08-24 16:49:12,747 | INFO | [publisher-air] Nuevo contacto directo: peer-0-1 (mohamed:6002)
+2026-08-24 16:49:14,865 | INFO | [publisher-air] Peer descubierto indirectamente: peer-1-1 (mohamed:6012)
+2026-08-24 16:49:14,865 | INFO | [publisher-air] Peer descubierto indirectamente: publisher-crime (mohamed:7001)
+2026-08-24 16:49:16,703 | INFO | [publisher-air] Peer publisher-crime confirmado como ALIVE
+2026-08-24 16:49:16,740 | INFO | [publisher-air] Peer peer-1-1 confirmado como ALIVE
+2026-08-24 16:49:20,669 | WARNING | [publisher-air] Peer peer-0-0 marcado como DEAD por timeout (10.01s sin contacto)
+2026-08-24 16:49:23,884 | INFO | [publisher-air] Peer peer-0-0 volvió a estar ALIVE
+2026-08-24 16:49:24,676 | WARNING | [publisher-air] Peer peer-1-0 marcado como DEAD por timeout (11.94s sin contacto)
+2026-08-24 16:49:54,816 | WARNING | [publisher-air] Peer peer-1-1 marcado como DEAD por timeout (10.79s sin contacto)
+2026-08-24 16:49:54,878 | INFO | [publisher-air] Peer peer-1-1 volvió a estar ALIVE
+2026-08-24 16:50:00,907 | WARNING | [publisher-air] Peer peer-0-1 marcado como DEAD por timeout (13.89s sin contacto)
+2026-08-24 16:50:00,954 | INFO | [publisher-air] Peer peer-0-1 volvió a estar ALIVE
+2026-08-24 16:50:04,912 | WARNING | [publisher-air] Peer peer-0-0 marcado como DEAD por timeout (11.87s sin contacto)
+2026-08-24 16:50:07,145 | INFO | [publisher-air] Peer peer-0-0 volvió a estar ALIVE
+2026-08-24 16:50:24,927 | WARNING | [publisher-air] Peer peer-0-0 marcado como DEAD por timeout (11.78s sin contacto)
+2026-08-24 16:50:33,093 | INFO | [publisher-air] Peer peer-0-0 volvió a estar ALIVE
+2026-08-24 16:50:45,051 | WARNING | [publisher-air] Peer peer-1-1 marcado como DEAD por timeout (11.76s sin contacto)
+2026-08-24 16:50:45,088 | INFO | [publisher-air] Peer peer-1-1 volvió a estar ALIVE
+2026-08-24 16:51:11,139 | WARNING | [publisher-air] Peer peer-1-1 marcado como DEAD por timeout (10.81s sin contacto)
+2026-08-24 16:51:11,170 | INFO | [publisher-air] Peer peer-1-1 volvió a estar ALIVE
