@@ -210,8 +210,10 @@ Compose/local, solo que ahí `--run-id` es `compose`/manual en vez de `$SLURM_JO
 
 Sin VPN a DIINF, esto se corrió de punta a punta (peers + publicadores + frontend +
 experimento de partición con `scancel`) contra un `slurm-wlm` real montado en WSL2, no
-una simulación — specs de esa máquina, qué es evidencia real y qué falta correr en
-DIINF de verdad, en [`scripts/slurm/README.md`](scripts/slurm/README.md).
+una simulación — esa es la evidencia que se usa para la entrega. Specs de esa máquina,
+logs/métricas reales de la corrida y detalle completo en
+[`scripts/slurm/README.md`](scripts/slurm/README.md) y
+[`resultados_slurm_local/`](resultados_slurm_local/).
 
 ## Agentes de IA
 
@@ -271,13 +273,3 @@ Reglas comunes a los tres agentes:
 - Para iterar más rápido, corran Ollama localmente (`ollama pull qwen2.5-coder:7b-instruct-q4_K_M`
   + `bash scripts/agents/run_ollama.sh scripts/agents/<agente>.md <archivo-de-contexto> <salida>`)
   antes de probar contra CI.
-
-## Próximos pasos
-
-- Correr los scripts Slurm contra el clúster DIINF real (issue #5): ya se validaron de
-  punta a punta contra un Slurm real en local (WSL2, ver `scripts/slurm/README.md`),
-  falta la corrida "oficial" en DIINF — alguien del equipo con VPN debería repetirla y
-  ajustar lo que `sinfo`/`sacct` digan que no calza (nombres de partición, `-w
-  <hostname>` con FQDN si hace falta).
-- Con esa corrida real, dejar evidencia del experimento de caída/partición en DIINF
-  (Sección 8 lo prefiere ahí; en Compose/local ya está cubierto).

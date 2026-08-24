@@ -1,0 +1,4 @@
+peer-1-0 mohamed 6011
+peer-0-0 mohamed 6001
+peer-1-1 mohamed 6012
+peer-0-1 mohamed 6002

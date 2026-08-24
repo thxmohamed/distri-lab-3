@@ -1,0 +1,27 @@
+[peer-0-0] soy el seed en mohamed:6001.
+2026-08-24 16:49:08,852 | INFO | [peer-0-0] Peer iniciado en mohamed:6001
+2026-08-24 16:49:08,854 | INFO | [peer-0-0] Nuevo contacto directo: peer-1-1 (mohamed:6012)
+2026-08-24 16:49:08,854 | INFO | [peer-0-0] JOIN recibido desde peer-1-1
+2026-08-24 16:49:08,854 | INFO | [peer-0-0] Nuevo contacto directo: peer-0-1 (mohamed:6002)
+2026-08-24 16:49:08,854 | INFO | [peer-0-0] JOIN recibido desde peer-0-1
+2026-08-24 16:49:08,855 | INFO | [peer-0-0] Nuevo contacto directo: peer-1-0 (mohamed:6011)
+2026-08-24 16:49:08,855 | INFO | [peer-0-0] JOIN recibido desde peer-1-0
+2026-08-24 16:49:10,659 | INFO | [peer-0-0] Nuevo contacto directo: publisher-air (mohamed:7002)
+2026-08-24 16:49:10,659 | INFO | [peer-0-0] JOIN recibido desde publisher-air
+2026-08-24 16:49:10,680 | INFO | [peer-0-0] Nuevo contacto directo: publisher-crime (mohamed:7001)
+2026-08-24 16:49:10,680 | INFO | [peer-0-0] JOIN recibido desde publisher-crime
+2026-08-24 16:51:17,274 | WARNING | [peer-0-0] Peer publisher-crime marcado como DEAD por timeout (10.04s sin contacto)
+2026-08-24 16:52:21,433 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:21,456 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:21,458 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:23,432 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:25,438 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:25,466 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:25,468 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:27,432 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:27,460 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:27,460 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:29,434 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:29,453 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:29,454 | WARNING | [peer-0-0] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:29,527 | WARNING | [peer-0-0] Peer peer-1-0 marcado como DEAD por timeout (10.08s sin contacto)

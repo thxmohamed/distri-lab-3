@@ -1,0 +1,50 @@
+seed: 2026
+delta_t: 1.0
+
+crime:
+  rates:
+    estacion-central:
+      robbery: 0.40
+      theft: 0.70
+
+    santiago:
+      robbery: 0.35
+      theft: 0.60
+
+    maipu:
+      robbery: 0.25
+      theft: 0.50
+
+  perception:
+    alpha: 0.80
+    beta0: -1.0
+    beta1: 0.40
+    beta2: 0.80
+    sigma_epsilon: 0.10
+
+air:
+  dataset: data/air_quality/open_meteo.csv
+
+  start_date: "2025-06-01"
+  end_date: "2025-06-30"
+
+  locations:
+    estacion-central:
+      latitude: -33.4590
+      longitude: -70.6990
+
+    santiago:
+      latitude: -33.4489
+      longitude: -70.6693
+
+    maipu:
+      latitude: -33.5106
+      longitude: -70.7578
+
+  perception:
+    alpha: 0.85
+    gamma: 0.60
+    delta: 0.30
+    sigma_epsilon: 2.0
+    clip_min: 0.0
+    clip_max: 500.0

@@ -4,17 +4,15 @@ Implementa la Sección 5 del enunciado: 2 hosts CPU para los peers
 (gossip + pub/sub) y 2 hosts GPU —usando **solo la CPU del host**, sin
 CUDA— para los publicadores de dominio y el frontend.
 
-**No se corrió contra el clúster DIINF real** (sin VPN desde donde estoy
-trabajando). En su lugar, se corrió contra un Slurm real (mismo
-`sbatch`/`srun`/`scancel`, no una simulación) montado en mi propia
-máquina — ver "Sustituto local de DIINF" y "Qué se validó" más abajo para
-el detalle completo y las diferencias que hay que tener en cuenta.
-Alguien del equipo con acceso a DIINF debería repetir esto ahí antes de
-la entrega para tener la evidencia "oficial" que pide la Sección 8; lo
-de acá es la evidencia que se pudo conseguir mientras tanto. Los nombres
-de partición (`CPU`/`GPU`) son los que usé en mi cluster local — en DIINF
-**correr `sinfo` primero** y ajustar o sobreescribir por línea de
-comandos si no coinciden.
+**Esto no se corrió contra el clúster DIINF real** — sin VPN no hay forma
+de llegar. En su lugar, se corrió contra un Slurm real (mismo
+`sbatch`/`srun`/`scancel`, no una simulación en bash) montado en mi
+propia máquina, y esa es la evidencia que se usa para la entrega — ver
+"Sustituto local de DIINF" y "Qué se validó" más abajo para el detalle y
+las diferencias con DIINF real. Los nombres de partición (`CPU`/`GPU`)
+son los que elegí para mi cluster local; si alguien llega a tener acceso
+a DIINF y quiere probar ahí, correr `sinfo` primero y ajustar o
+sobreescribir por línea de comandos si no coinciden.
 
 ## Orden de arranque
 
@@ -70,8 +68,11 @@ Mapa de steps -> peer (para el experimento de caída, Sección 5.3 paso 7):
 ```
 
 Ese mapeo es best-effort (asume que Slurm asigna los step id en el orden
-en que se lanzaron los `srun`) — se verificó correcto en la corrida local
-(ver más abajo), pero conviene confirmarlo antes de matar nada:
+en que se lanzaron los `srun`) — y en la corrida local **no acertó**: el
+mapeo decía `6.3 -> peer-1-1`, pero el que realmente murió al hacer
+`scancel 6.3` fue `peer-1-0` (confirmado cruzando `squeue -j 6 -s` y los
+logs, ver `resultados_slurm_local/run-6/README.md`). Conviene confirmar
+siempre antes de matar nada:
 
 ```bash
 sacct -j 12345 --format=JobID,NodeList,Start,State   # si el clúster tiene accounting
@@ -89,8 +90,9 @@ tail -f $CIVICMESH_RUNS/$RUN_ID/logs/peer-1-1.log   # el vecino en el mismo host
 
 Comparar `metrics/peer-*.jsonl` (o el frontend) antes/durante/después de
 la caída — igual que hace `scripts/analytics/run_partition_experiment.sh`
-en Docker Compose, pero acá con evidencia real multi-host en DIINF
-(preferido por la Sección 8 del enunciado).
+en Docker Compose, pero acá vía Slurm real (`scancel` a un step, no
+`docker kill`). Ejemplo real de esto corriendo en
+`resultados_slurm_local/run-6/`.
 
 ## Sustituto local de DIINF (Slurm real, sin VPN)
 
@@ -114,6 +116,11 @@ de DIINF para esta corrida):
 | SO host | Windows 11 Home Single Language, 64 bits (build 10.0.26200) |
 | Entorno Slurm | WSL2, Ubuntu 24.04.1 LTS, `slurm-wlm` 23.11.4, `munge` |
 
+Metrics, logs, config snapshot y el mapeo de steps de una corrida completa (jobs 6 y 7,
+incluyendo el `scancel` de un peer) quedaron en
+[`resultados_slurm_local/run-6/`](../../resultados_slurm_local/run-6/), con su propio
+README explicando qué es cada archivo.
+
 ## Qué se validó (y qué no)
 
 - ✅ **Corrida real de punta a punta** (no simulación): `sbatch
@@ -126,11 +133,12 @@ de DIINF para esta corrida):
   publicaron delitos (`estacion-central`) y aire real de Open-Meteo
   (`santiago`, PM2.5), y `metrics/peer-*.jsonl` quedó con snapshots
   reales de ambos dominios y canales.
-- ✅ **Experimento de partición real**: `scancel 4.3` mató únicamente
-  `peer-1-1` (su propio `srun` step); tanto el seed como su vecino en el
-  mismo host CPU lo marcaron `DEAD` de forma independiente por timeout
-  (~10-12s, `failure_timeout` default), quedando en los logs
-  `peer-0-0.log`/`peer-1-0.log`. Evidencia directa para la Sección 5.3
+- ✅ **Experimento de partición real**: `scancel 6.3` mató un peer (que
+  terminó siendo `peer-1-0`, no el que el mapeo impreso predecía —ver
+  "Experimento de caída/partición" más arriba); tanto el seed como el
+  otro peer que seguía vivo lo marcaron `DEAD` de forma independiente por
+  timeout (~10s, `failure_timeout` default). Logs completos en
+  `resultados_slurm_local/run-6/`. Evidencia directa para la Sección 5.3
   paso 7 / Sección 11.
 - ✅ Frontend accesible por HTTP (`curl` devolvió 200) tras el fix de
   `--server.headless` (ver más abajo).

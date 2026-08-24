@@ -1,0 +1,42 @@
+[publisher-crime] mohamed:7001, comuna=estacion-central, seed=mohamed:6001
+2026-08-24 16:49:10,678 | INFO | [publisher-crime] Peer iniciado en mohamed:7001
+2026-08-24 16:49:10,680 | INFO | [publisher-crime] Nuevo contacto directo: peer-0-0 (mohamed:6001)
+2026-08-24 16:49:10,680 | INFO | [publisher-crime] JOIN enviado a peer-0-0
+2026-08-24 16:49:12,732 | INFO | [publisher-crime] Nuevo contacto directo: peer-1-0 (mohamed:6011)
+2026-08-24 16:49:12,739 | INFO | [publisher-crime] Nuevo contacto directo: peer-0-1 (mohamed:6002)
+2026-08-24 16:49:14,861 | INFO | [publisher-crime] Peer descubierto indirectamente: peer-1-1 (mohamed:6012)
+2026-08-24 16:49:14,861 | INFO | [publisher-crime] Peer descubierto indirectamente: publisher-air (mohamed:7002)
+2026-08-24 16:49:16,667 | INFO | [publisher-crime] Peer publisher-air confirmado como ALIVE
+2026-08-24 16:49:16,746 | INFO | [publisher-crime] Peer peer-1-1 confirmado como ALIVE
+2026-08-24 16:49:34,804 | WARNING | [publisher-crime] Peer peer-0-1 marcado como DEAD por timeout (10.92s sin contacto)
+2026-08-24 16:49:34,806 | WARNING | [publisher-crime] Peer peer-1-1 marcado como DEAD por timeout (10.92s sin contacto)
+2026-08-24 16:49:40,815 | WARNING | [publisher-crime] Peer peer-0-0 marcado como DEAD por timeout (11.82s sin contacto)
+2026-08-24 16:49:41,017 | INFO | [publisher-crime] Peer peer-0-0 volvió a estar ALIVE
+2026-08-24 16:50:16,933 | WARNING | [publisher-crime] Peer publisher-air marcado como DEAD por timeout (10.01s sin contacto)
+2026-08-24 16:50:21,003 | INFO | [publisher-crime] Peer publisher-air volvió a estar ALIVE
+2026-08-24 16:50:33,047 | WARNING | [publisher-crime] Peer peer-0-0 marcado como DEAD por timeout (10.88s sin contacto)
+2026-08-24 16:50:33,069 | INFO | [publisher-crime] Peer peer-0-0 volvió a estar ALIVE
+2026-08-24 16:50:45,058 | WARNING | [publisher-crime] Peer peer-0-0 marcado como DEAD por timeout (11.99s sin contacto)
+2026-08-24 16:50:45,305 | INFO | [publisher-crime] Peer peer-0-0 volvió a estar ALIVE
+2026-08-24 16:50:55,069 | WARNING | [publisher-crime] Peer publisher-air marcado como DEAD por timeout (10.01s sin contacto)
+2026-08-24 16:50:56,162 | INFO | [publisher-crime] Peer publisher-air volvió a estar ALIVE
+2026-08-24 16:51:09,145 | WARNING | [publisher-crime] Peer peer-0-0 marcado como DEAD por timeout (11.82s sin contacto)
+2026-08-24 16:52:03,298 | WARNING | [publisher-crime] Peer publisher-air marcado como DEAD por timeout (11.88s sin contacto)
+2026-08-24 16:52:08,561 | INFO | [publisher-crime] Peer publisher-air volvió a estar ALIVE
+2026-08-24 16:52:21,434 | WARNING | [publisher-crime] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:21,436 | WARNING | [publisher-crime] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:21,437 | WARNING | [publisher-crime] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:23,427 | WARNING | [publisher-crime] Peer publisher-air marcado como DEAD por timeout (11.86s sin contacto)
+2026-08-24 16:52:23,433 | WARNING | [publisher-crime] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:23,433 | WARNING | [publisher-crime] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:23,434 | WARNING | [publisher-crime] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:23,582 | INFO | [publisher-crime] Peer publisher-air volvió a estar ALIVE
+2026-08-24 16:52:25,438 | WARNING | [publisher-crime] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:25,439 | WARNING | [publisher-crime] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:25,440 | WARNING | [publisher-crime] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:27,436 | WARNING | [publisher-crime] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:27,436 | WARNING | [publisher-crime] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:27,436 | WARNING | [publisher-crime] Error enviando PUBSUB: No fue posible conectar con peer-1-0 (mohamed:6011)
+2026-08-24 16:52:29,434 | WARNING | [publisher-crime] Peer peer-1-0 marcado como DEAD por timeout (10.01s sin contacto)
+2026-08-24 16:52:43,526 | WARNING | [publisher-crime] Peer publisher-air marcado como DEAD por timeout (10.93s sin contacto)
+2026-08-24 16:52:49,697 | INFO | [publisher-crime] Peer publisher-air volvió a estar ALIVE

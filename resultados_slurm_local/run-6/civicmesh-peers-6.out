@@ -1,0 +1,8 @@
+RUN_ID=6
+CIVICMESH_RUNS=/home/mohamed/civicmesh-runs
+Nodos asignados: cpu-node-01 cpu-node-02
+Mapa de steps -> peer (para el experimento de caída, Sección 5.3 paso 7):
+  scancel 6.0  ->  peer-0-0 (cpu-node-01)
+  scancel 6.1  ->  peer-0-1 (cpu-node-01)
+  scancel 6.2  ->  peer-1-0 (cpu-node-02)
+  scancel 6.3  ->  peer-1-1 (cpu-node-02)

@@ -1,0 +1,11 @@
+pubsub:
+  channels:
+    objective:
+      ttl: 4
+      priority: 100
+      fanout: 3
+
+    subjective:
+      ttl: 2
+      priority: 50
+      fanout: 2
