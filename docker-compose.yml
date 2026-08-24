@@ -25,6 +25,11 @@ services:
       python -m civicmesh.pubsub.run_peer
       --id peer-seed --host peer-seed --port 6001
       --subscribe estacion-central,santiago,maipu
+      --run-id compose
+    environment:
+      - CIVICMESH_RUNS=/civicmesh-runs
+    volumes:
+      - ./runs:/civicmesh-runs
     healthcheck:
       # OJO: no usar 'localhost' aquí -- el peer se bindea a la IP que
       # resuelve su propio nombre de servicio (ver nota de --host más
@@ -48,6 +53,11 @@ services:
       --id peer-2 --host peer-2 --port 6001
       --seed-id peer-seed --seed-host peer-seed --seed-port 6001
       --subscribe estacion-central,santiago,maipu
+      --run-id compose
+    environment:
+      - CIVICMESH_RUNS=/civicmesh-runs
+    volumes:
+      - ./runs:/civicmesh-runs
     networks: [civicmesh]
 
   peer-3:
@@ -61,6 +71,11 @@ services:
       --id peer-3 --host peer-3 --port 6001
       --seed-id peer-seed --seed-host peer-seed --seed-port 6001
       --subscribe estacion-central,santiago,maipu
+      --run-id compose
+    environment:
+      - CIVICMESH_RUNS=/civicmesh-runs
+    volumes:
+      - ./runs:/civicmesh-runs
     networks: [civicmesh]
 
   publisher-crime:
@@ -94,6 +109,27 @@ services:
       --id publisher-air --host publisher-air --port 6001
       --seed-id peer-seed --seed-host peer-seed --seed-port 6001
       --interval 2
+    networks: [civicmesh]
+
+  # Frontend de métricas: lee metrics/*.jsonl desde el mismo volumen
+  # que los peers escriben ($CIVICMESH_RUNS/<run_id>/metrics/), no
+  # habla pub/sub ni gossip.
+  frontend:
+    image: civicmesh:local
+    container_name: civicmesh-frontend
+    command: >
+      streamlit run civicmesh/frontend/app.py
+      --server.port 8501 --server.address 0.0.0.0
+    # Si arranca junto al resto de los 5 servicios puede morir por un
+    # pico de carga puntual del host (Exited 137); se reinicia solo.
+    restart: on-failure
+    environment:
+      - CIVICMESH_RUNS=/civicmesh-runs
+      - RUN_ID=compose
+    volumes:
+      - ./runs:/civicmesh-runs
+    ports:
+      - "8501:8501"
     networks: [civicmesh]
 
 networks:

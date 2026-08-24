@@ -48,9 +48,16 @@ distri-lab-3/
 │   ├── pubsub/              # Rol 2: tópicos, should_forward, TTL/prioridad/fanout
 │   │   ├── network_adapter.py  # PubSubPeer(Peer): agrega manejo de mensajes PUBSUB
 │   │   └── run_peer.py         # CLI: peer con pub/sub -- el que usa docker-compose/Slurm
-│   └── domains/             # Rol 3: generadores + replay (Sección 4.3)
-│       ├── crime.py / air_quality.py / rumors.py
-│       └── run_publisher.py    # CLI: publicador de un dominio en una comuna
+│   ├── domains/             # Rol 3: generadores + replay (Sección 4.3)
+│   │   ├── crime.py / air_quality.py / rumors.py
+│   │   └── run_publisher.py    # CLI: publicador de un dominio en una comuna
+│   ├── analytics/           # Rol 4: convergencia/divergencia + writer de métricas
+│   │   ├── convergence.py      # perception_gap() y peer_convergence() (Sección 4.4)
+│   │   ├── state.py            # estado local por (topic, channel)
+│   │   ├── writer.py           # vuelca snapshots JSONL a metrics/ (Sección 5.2)
+│   │   └── delivery.py         # delivery_function que engancha todo lo anterior
+│   └── frontend/            # Rol 4: frontend mínimo de estadísticas (Sección 5.4)
+│       └── app.py               # Streamlit: lee metrics/*.jsonl de un run_id
 ├── config/
 │   ├── domains.yaml         # seed, tasas de delitos, params de percepción, comunas
 │   └── pubsub.yaml          # TTL/prioridad/fanout por canal (objetivo/subjetivo)
@@ -59,6 +66,8 @@ distri-lab-3/
 │   ├── agents/                # Los tres agentes de IA (ver sección Agentes de IA)
 │   │   ├── documentador.md / bug-reviewer.md / mr-reviewer.md
 │   │   └── run_ollama.sh / ollama_generate.py / apply_edits.py / parse_mr_response.py
+│   ├── analytics/
+│   │   └── run_partition_experiment.sh  # experimento de caída/partición (Sección 5.3)
 │   └── data/download_open_meteo.py
 ├── tests/
 │   ├── unit/
@@ -88,17 +97,28 @@ porque el directorio del repo no queda en `sys.path`).
 ## Docker / Docker Compose
 
 ```bash
-docker compose up --build              # 3 peers + publicador de delitos (Dominio A)
-docker compose --profile air up --build # además, publicador de aire (Dominio B)
-docker compose down                    # o --profile air down si se levantó con ese perfil
+docker compose build                    # primera vez / tras tocar requirements.txt: ~3 min
+docker compose up -d                    # 3 peers + publicador de delitos (Dominio A) + frontend
+docker compose --profile air up -d      # además, publicador de aire (Dominio B)
+docker compose down                     # o --profile air down si se levantó con ese perfil
 ```
 
-Levanta `peer-seed` (bootstrap), `peer-2` y `peer-3` (hacen `JOIN` contra `peer-seed`) y
-`publisher-crime` (comuna `estacion-central`). Los peers **no** están conectados
-directamente entre sí más que a través del seed: los mensajes de `publisher-crime` se
-propagan al resto vía `should_forward` (TTL/prioridad/fanout de `civicmesh/pubsub`), no
-por conexión directa — se puede confirmar en los logs (`docker compose logs peer-2`)
-porque los mensajes que no vinieron del seed llegan con `hop_count=2`.
+> **Por qué `build` separado de `up`**: la imagen instala `streamlit`+`pandas` (para el
+> frontend, Rol 4) además de las dependencias livianas de los peers, así que el primer
+> build tarda bastante (~3 min) en descargarlas. Si se usa `docker compose up --build`
+> directo y el build no alcanza a terminar (o el runner tiene poco ancho de banda),
+> Compose puede terminar intentando *pull* de una imagen `civicmesh:local` que nunca se
+> construyó, y falla con `pull access denied` (no existe un repo público con ese nombre).
+> Separar los dos pasos evita esa carrera. Si de todos modos ves ese error: `docker
+> compose build` de nuevo y revisa que termine con `Built` antes de hacer `up`.
+
+Levanta `peer-seed` (bootstrap), `peer-2` y `peer-3` (hacen `JOIN` contra `peer-seed`),
+`publisher-crime` (comuna `estacion-central`) y el `frontend` (Rol 4, puerto 8501). Los
+peers **no** están conectados directamente entre sí más que a través del seed: los
+mensajes de `publisher-crime` se propagan al resto vía `should_forward`
+(TTL/prioridad/fanout de `civicmesh/pubsub`), no por conexión directa — se puede
+confirmar en los logs (`docker compose logs peer-2`) porque los mensajes que no
+vinieron del seed llegan con `hop_count=2`.
 
 > **Nota de diseño**: `civicmesh.network.run_peer` (Rol 1) solo entiende mensajes
 > `JOIN`/`GOSSIP` -- no reenvía pub/sub. El proceso que corre en Compose/Slurm como
@@ -106,6 +126,67 @@ porque los mensajes que no vinieron del seed llegan con `hop_count=2`.
 > integrados). Se agregó como CLI nuevo porque antes solo `run_publisher.py` instanciaba
 > `PubSubPeer`, y no existía forma de levantar un peer "puro" (sin publicar nada) que
 > igual pudiera suscribirse y reenviar.
+
+## Métricas, frontend y experimento de partición (Rol 4)
+
+### Convención de `metrics/`
+
+El bus de configuración/métricas entre Slurm (o Compose/local) y el
+frontend es el filesystem compartido, bajo
+`$CIVICMESH_RUNS/<run_id>/metrics/`. `civicmesh.pubsub.run_peer` acepta dos
+flags nuevos para activar esto (si no se pasan, el peer solo imprime por
+stdout como antes):
+
+```bash
+python -m civicmesh.pubsub.run_peer --id peer-A --port 6001 \
+  --subscribe estacion-central \
+  --run-id mi-corrida          # arma $CIVICMESH_RUNS/mi-corrida/metrics/
+  # o, para fijar la ruta directo:
+  # --metrics-dir ./runs/mi-corrida/metrics
+```
+
+`CIVICMESH_RUNS` por defecto es `./runs` si la variable de entorno no está
+seteada (útil para correr localmente sin Slurm ni Compose). Cada peer
+escribe su propio `metrics/<peer_id>.jsonl`, un JSON por línea, con el
+snapshot de cada mensaje entregado: `topic`, `channel`, `domain`,
+`commune`, `value` (el dato relevante del canal), y `divergence`
+(`|percepción - realidad|`, solo en el canal subjetivo).
+
+En `docker-compose.yml` los 3 peers ya corren con `--run-id compose` y
+montan `./runs:/civicmesh-runs`, así que basta con `docker compose up
+--build` para tener métricas reales en `./runs/compose/metrics/` del host.
+
+### Frontend de estadísticas
+
+```bash
+# Local (fuera de Compose), apuntando a una corrida existente:
+CIVICMESH_RUNS=./runs RUN_ID=mi-corrida streamlit run civicmesh/frontend/app.py
+
+# Vía Docker Compose (ya incluido como servicio `frontend`):
+docker compose build && docker compose up -d   # levanta también el frontend en :8501
+```
+
+Abrir `http://localhost:8501`. Muestra las tres vistas mínimas de la
+Sección 5.4: estado por tópico × canal, brecha percepción-realidad por
+comuna, y convergencia entre peers del canal objetivo (dispersión de los
+valores que cada peer ve para el mismo tópico/timestamp).
+
+### Experimento de caída/partición
+
+Es un script bash (`.sh`): en Windows correrlo desde una terminal **Git
+Bash** (clic derecho en la carpeta del repo → "Git Bash Here"), no desde
+PowerShell/cmd. Si preferís quedarte en PowerShell, invocá bash a mano:
+`bash scripts/analytics/run_partition_experiment.sh`.
+
+```bash
+docker compose build && docker compose up -d
+./scripts/analytics/run_partition_experiment.sh   # mata peer-3, espera, lo revive
+```
+
+El script mata un contenedor peer a mitad de la corrida (`docker kill`),
+espera, y lo revive con `docker compose up -d`. Compara
+`metrics/peer-*.jsonl` (o la tabla de convergencia del frontend)
+antes/durante/después.
 
 ## Agentes de IA
 
@@ -168,5 +249,8 @@ Reglas comunes a los tres agentes:
 
 ## Próximos pasos
 
-- Scripts Slurm + convención `$CIVICMESH_RUNS/<run_id>/` (issue #5).
-- Frontend de métricas y experimento de caída/partición (issue #4).
+- Scripts Slurm (issue #5). La convención `$CIVICMESH_RUNS/<run_id>/metrics/`
+  ya existe (ver sección "Métricas, frontend y experimento de partición"),
+  falta el `sbatch`/`srun` que la use en el clúster DIINF.
+- Correr el experimento de caída/partición también en DIINF (Sección 8 lo
+  prefiere ahí; en Compose/local ya está cubierto).
