@@ -119,9 +119,13 @@ services:
     container_name: civicmesh-frontend
     command: >
       streamlit run civicmesh/frontend/app.py
-      --server.port 8501 --server.address 0.0.0.0
-    # Si arranca junto al resto de los 5 servicios puede morir por un
-    # pico de carga puntual del host (Exited 137); se reinicia solo.
+      --server.port 8501 --server.address 0.0.0.0 --server.headless true
+    # --server.headless evita la pantalla de bienvenida de Streamlit (pide
+    # un email por stdin la primera vez); sin TTY, revienta con exit 255
+    # (visto al probar el mismo comando en scripts/slurm/start_frontend.sh
+    # contra un Slurm real). Se deja restart: on-failure igual, por si
+    # arrancar junto al resto de los 5 servicios lo mata por un pico de
+    # carga puntual del host (Exited 137, causa distinta).
     restart: on-failure
     environment:
       - CIVICMESH_RUNS=/civicmesh-runs

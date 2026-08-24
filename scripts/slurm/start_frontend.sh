@@ -17,5 +17,8 @@ echo "[frontend] levantando en $HOST:8501 (RUN_ID=$RUN_ID)"
 mkdir -p "$CIVICMESH_RUNS/$RUN_ID/logs"
 echo "$HOST" >"$CIVICMESH_RUNS/$RUN_ID/logs/frontend_host.txt"
 
+# --server.headless evita la pantalla de bienvenida de Streamlit (pide
+# un email por stdin la primera vez); sin TTY en un srun step, eso cuelga
+# o revienta el proceso (visto en pruebas reales: exit code 255).
 exec streamlit run civicmesh/frontend/app.py \
-  --server.port 8501 --server.address 0.0.0.0
+  --server.port 8501 --server.address 0.0.0.0 --server.headless true
