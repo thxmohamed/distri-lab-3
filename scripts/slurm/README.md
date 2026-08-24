@@ -54,6 +54,10 @@ ssh -L 8501:gpu-node-02:8501 <usuario>@<login-node-diinf>
 # Abrir http://localhost:8501 -- el run_id ya viene precargado (env RUN_ID)
 ```
 
+En la corrida local, el frontend está en `http://localhost:8501` directo (WSL2 reenvía
+el puerto al host Windows, sin túnel necesario). Capturas de las 3 vistas en
+[`resultados_slurm_local/run-6/screenshots/`](../../resultados_slurm_local/run-6/screenshots/).
+
 ## Experimento de caída/partición (Sección 5.3 paso 7 / Sección 11)
 
 `peers.sbatch` imprime, al arrancar, el mapeo `step -> peer` (cada peer es

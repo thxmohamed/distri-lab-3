@@ -49,11 +49,30 @@ Y en los peers que siguieron vivos (`peer-0-0.log`, `peer-1-1.log`): ambos detec
 2026-08-24 16:52:29  [peer-1-1] Peer peer-1-0 marcado como DEAD por timeout (10.08s sin contacto)
 ```
 
-## Ver el frontend en vivo (mientras la corrida siga levantada)
+## Capturas del frontend (`screenshots/`)
 
-No es algo que se pueda dejar como imagen fija fácil (es una app de Streamlit, no una
-página estática) y no logré una captura automatizada limpia con Chrome/Edge headless
-(la screenshot salía a mitad de cargar). Mientras el job 7 siga corriendo en mi
-máquina, el frontend real está en `http://localhost:8501` (WSL2 reenvía el puerto al
-Windows host automáticamente). Si alguien del equipo se conecta por escritorio remoto o
-está físicamente en la máquina, se puede abrir ahí directo.
+Las 3 vistas mínimas que pide la Sección 5.4, capturadas a mano del frontend real
+corriendo contra esta misma corrida (job 7) — un intento automatizado con Chrome/Edge
+headless no funcionó bien (la screenshot salía a mitad de cargar, antes de que
+Streamlit terminara de pintar vía WebSocket):
+
+- **Estado por tópico × canal** (`estado-topico-canal.png`): última muestra por
+  tópico/canal/dominio.
+- **Brecha percepción-realidad** (`brecha-percepcion-realidad-estacion-central.png`,
+  `brecha-percepcion-realidad-santiago.png`): una por dominio -- delitos y aire.
+- **Convergencia entre peers** (`convergencia-peers.png`): dispersión del canal
+  objetivo entre los peers que siguen vivos por tópico/timestamp (`n_peers` baja de 4 a
+  3 después del `scancel` descrito arriba).
+
+| Estado por tópico × canal | Convergencia entre peers |
+|---|---|
+| ![Estado por tópico x canal](run-6/screenshots/estado-topico-canal.png) | ![Convergencia entre peers](run-6/screenshots/convergencia-peers.png) |
+
+| Brecha percepción-realidad — delitos | Brecha percepción-realidad — aire |
+|---|---|
+| ![Brecha estacion-central](run-6/screenshots/brecha-percepcion-realidad-estacion-central.png) | ![Brecha santiago](run-6/screenshots/brecha-percepcion-realidad-santiago.png) |
+
+El frontend en sí solo es accesible desde mi máquina (`http://localhost:8501`, WSL2
+reenvía el puerto al host Windows) mientras yo deje la corrida levantada -- no hay forma
+de que el resto del equipo lo vea en vivo sin conectarse a mi PC, por eso estas capturas
+son la evidencia que queda en el repo.
