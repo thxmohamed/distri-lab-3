@@ -2,7 +2,16 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from pathlib import Path
+
+# `streamlit run civicmesh/frontend/app.py` ejecuta este archivo directo
+# (no como `python -m`), así que Python solo agrega la carpeta del propio
+# script a sys.path, no la raíz del repo. Sin esto, "import civicmesh..."
+# falla con ModuleNotFoundError.
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[2])
+)
 
 import pandas as pd
 import streamlit as st
@@ -41,7 +50,15 @@ def load_snapshots(metrics_dir: Path) -> pd.DataFrame:
     if not rows:
         return pd.DataFrame(columns=METRICS_COLUMNS)
 
-    return pd.DataFrame(rows)
+    df = pd.DataFrame(rows)
+
+    # recorded_at se guarda en metrics/*.jsonl como epoch (time.time());
+    # acá se muestra como fecha/hora legible, no como número crudo.
+    df["recorded_at"] = pd.to_datetime(
+        df["recorded_at"], unit="s"
+    )
+
+    return df
 
 
 def render_topic_channel_state(df: pd.DataFrame) -> None:

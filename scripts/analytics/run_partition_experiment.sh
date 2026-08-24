@@ -10,7 +10,7 @@
 # Asume que la malla ya está arriba:
 #   docker compose up --build -d
 #
-# Uso:
+# Uso (bash -- en Windows, correr desde Git Bash, no PowerShell/cmd):
 #   ./scripts/analytics/run_partition_experiment.sh [target] [warmup_s] [downtime_s]
 #
 #   target:     contenedor a matar (default: civicmesh-peer-3)
@@ -61,7 +61,7 @@ snapshot "DESPUÉS de la recuperación"
 
 cat <<'EOF'
 
-==> Listo. Para el informe:
+==> Listo. Qué revisar:
     - Compara metrics/peer-*.jsonl antes / durante / después: el peer
       caído no debe escribir snapshots nuevos mientras estuvo fuera, y
       los peers sobrevivientes deberían mostrar mayor "convergence"
@@ -69,6 +69,6 @@ cat <<'EOF'
       tramo, porque dejan de ver los valores que ese peer reportaba.
     - Abre el frontend (http://localhost:8501) y compara la tabla de
       "Convergencia entre peers" antes/durante/después.
-    - Documentar también en el informe qué pasó con should_forward y el
-      hop_count una vez que el peer se reincorpora.
+    - Qué pasó con should_forward y el hop_count una vez que el peer
+      se reincorpora.
 EOF

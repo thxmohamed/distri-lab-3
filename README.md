@@ -97,17 +97,28 @@ porque el directorio del repo no queda en `sys.path`).
 ## Docker / Docker Compose
 
 ```bash
-docker compose up --build              # 3 peers + publicador de delitos (Dominio A)
-docker compose --profile air up --build # además, publicador de aire (Dominio B)
-docker compose down                    # o --profile air down si se levantó con ese perfil
+docker compose build                    # primera vez / tras tocar requirements.txt: ~3 min
+docker compose up -d                    # 3 peers + publicador de delitos (Dominio A) + frontend
+docker compose --profile air up -d      # además, publicador de aire (Dominio B)
+docker compose down                     # o --profile air down si se levantó con ese perfil
 ```
 
-Levanta `peer-seed` (bootstrap), `peer-2` y `peer-3` (hacen `JOIN` contra `peer-seed`) y
-`publisher-crime` (comuna `estacion-central`). Los peers **no** están conectados
-directamente entre sí más que a través del seed: los mensajes de `publisher-crime` se
-propagan al resto vía `should_forward` (TTL/prioridad/fanout de `civicmesh/pubsub`), no
-por conexión directa — se puede confirmar en los logs (`docker compose logs peer-2`)
-porque los mensajes que no vinieron del seed llegan con `hop_count=2`.
+> **Por qué `build` separado de `up`**: la imagen instala `streamlit`+`pandas` (para el
+> frontend, Rol 4) además de las dependencias livianas de los peers, así que el primer
+> build tarda bastante (~3 min) en descargarlas. Si se usa `docker compose up --build`
+> directo y el build no alcanza a terminar (o el runner tiene poco ancho de banda),
+> Compose puede terminar intentando *pull* de una imagen `civicmesh:local` que nunca se
+> construyó, y falla con `pull access denied` (no existe un repo público con ese nombre).
+> Separar los dos pasos evita esa carrera. Si de todos modos ves ese error: `docker
+> compose build` de nuevo y revisa que termine con `Built` antes de hacer `up`.
+
+Levanta `peer-seed` (bootstrap), `peer-2` y `peer-3` (hacen `JOIN` contra `peer-seed`),
+`publisher-crime` (comuna `estacion-central`) y el `frontend` (Rol 4, puerto 8501). Los
+peers **no** están conectados directamente entre sí más que a través del seed: los
+mensajes de `publisher-crime` se propagan al resto vía `should_forward`
+(TTL/prioridad/fanout de `civicmesh/pubsub`), no por conexión directa — se puede
+confirmar en los logs (`docker compose logs peer-2`) porque los mensajes que no
+vinieron del seed llegan con `hop_count=2`.
 
 > **Nota de diseño**: `civicmesh.network.run_peer` (Rol 1) solo entiende mensajes
 > `JOIN`/`GOSSIP` -- no reenvía pub/sub. El proceso que corre en Compose/Slurm como
@@ -120,8 +131,8 @@ porque los mensajes que no vinieron del seed llegan con `hop_count=2`.
 
 ### Convención de `metrics/`
 
-Sección 5.2 del enunciado: el bus de configuración/métricas entre Slurm (o
-Compose/local) y el frontend es el filesystem compartido, bajo
+El bus de configuración/métricas entre Slurm (o Compose/local) y el
+frontend es el filesystem compartido, bajo
 `$CIVICMESH_RUNS/<run_id>/metrics/`. `civicmesh.pubsub.run_peer` acepta dos
 flags nuevos para activar esto (si no se pasan, el peer solo imprime por
 stdout como antes):
@@ -152,7 +163,7 @@ montan `./runs:/civicmesh-runs`, así que basta con `docker compose up
 CIVICMESH_RUNS=./runs RUN_ID=mi-corrida streamlit run civicmesh/frontend/app.py
 
 # Vía Docker Compose (ya incluido como servicio `frontend`):
-docker compose up --build   # levanta también el frontend en :8501
+docker compose build && docker compose up -d   # levanta también el frontend en :8501
 ```
 
 Abrir `http://localhost:8501`. Muestra las tres vistas mínimas de la
@@ -162,16 +173,20 @@ valores que cada peer ve para el mismo tópico/timestamp).
 
 ### Experimento de caída/partición
 
+Es un script bash (`.sh`): en Windows correrlo desde una terminal **Git
+Bash** (clic derecho en la carpeta del repo → "Git Bash Here"), no desde
+PowerShell/cmd. Si preferís quedarte en PowerShell, invocá bash a mano:
+`bash scripts/analytics/run_partition_experiment.sh`.
+
 ```bash
-docker compose up --build -d
+docker compose build && docker compose up -d
 ./scripts/analytics/run_partition_experiment.sh   # mata peer-3, espera, lo revive
 ```
 
 El script mata un contenedor peer a mitad de la corrida (`docker kill`),
 espera, y lo revive con `docker compose up -d`. Compara
 `metrics/peer-*.jsonl` (o la tabla de convergencia del frontend)
-antes/durante/después para el informe (Sección 8 y criterio de rechazo de
-la Sección 11).
+antes/durante/después.
 
 ## Agentes de IA
 

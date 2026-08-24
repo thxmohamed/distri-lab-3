@@ -120,6 +120,9 @@ services:
     command: >
       streamlit run civicmesh/frontend/app.py
       --server.port 8501 --server.address 0.0.0.0
+    # Si arranca junto al resto de los 5 servicios puede morir por un
+    # pico de carga puntual del host (Exited 137); se reinicia solo.
+    restart: on-failure
     environment:
       - CIVICMESH_RUNS=/civicmesh-runs
       - RUN_ID=compose
