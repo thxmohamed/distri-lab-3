@@ -4,7 +4,10 @@ import argparse
 import asyncio
 import json
 import logging
+import os
+from pathlib import Path
 
+from civicmesh.analytics import build_analytics_delivery_function
 from civicmesh.network.peer_info import PeerInfo
 from civicmesh.pubsub.message import PubSubMessage
 from civicmesh.pubsub.network_adapter import PubSubPeer
@@ -143,6 +146,28 @@ def build_parser() -> argparse.ArgumentParser:
         help="Puerto del peer seed.",
     )
 
+    # Analítica / métricas (Rol 4, Sección 5.2)
+    parser.add_argument(
+        "--metrics-dir",
+        default=None,
+        help=(
+            "Directorio donde volcar metrics/<peer_id>.jsonl "
+            "(Sección 5.2). Tiene prioridad sobre --run-id. "
+            "Si no se indica ninguno de los dos, el peer solo "
+            "imprime los mensajes entregados por stdout."
+        ),
+    )
+
+    parser.add_argument(
+        "--run-id",
+        default=None,
+        help=(
+            "Id de la corrida. Junto a la variable de entorno "
+            "CIVICMESH_RUNS (default ./runs) arma la ruta "
+            "$CIVICMESH_RUNS/<run-id>/metrics/."
+        ),
+    )
+
     return parser
 
 
@@ -205,16 +230,53 @@ def build_delivery_function(
     return deliver
 
 
+def resolve_metrics_dir(
+    args: argparse.Namespace,
+) -> Path | None:
+    """
+    Prioridad: --metrics-dir explícito > --run-id + $CIVICMESH_RUNS.
+
+    Si no se indica ninguno, no hay capa de analítica (None) y el
+    peer conserva el comportamiento original de solo imprimir.
+    """
+
+    if args.metrics_dir is not None:
+        return Path(args.metrics_dir)
+
+    if args.run_id is not None:
+        runs_root = os.environ.get(
+            "CIVICMESH_RUNS", "./runs"
+        )
+
+        return (
+            Path(runs_root) / args.run_id / "metrics"
+        )
+
+    return None
+
+
 def build_peer(
     args: argparse.Namespace,
 ) -> PubSubPeer:
+    metrics_dir = resolve_metrics_dir(args)
+
+    if metrics_dir is not None:
+        delivery_function = (
+            build_analytics_delivery_function(
+                args.peer_id,
+                metrics_dir,
+            )
+        )
+    else:
+        delivery_function = build_delivery_function(
+            args.peer_id
+        )
+
     return PubSubPeer(
         peer_id=args.peer_id,
         host=args.host,
         port=args.port,
-        delivery_function=build_delivery_function(
-            args.peer_id
-        ),
+        delivery_function=delivery_function,
 
         # Vista parcial
         max_view_size=args.max_view_size,
@@ -300,6 +362,14 @@ async def run_peer(
             f"[{args.peer_id}] "
             f"PubSubPeer iniciado en "
             f"{args.host}:{args.port}"
+        )
+
+        metrics_dir = resolve_metrics_dir(args)
+
+        print(
+            f"[{args.peer_id}] "
+            f"metrics_dir="
+            f"{metrics_dir if metrics_dir else '(deshabilitado)'}"
         )
 
         print(

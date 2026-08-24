@@ -7,6 +7,7 @@ from civicmesh.pubsub.run_peer import (
     build_delivery_function,
     build_parser,
     build_peer,
+    resolve_metrics_dir,
     validate_seed_args,
 )
 
@@ -29,6 +30,8 @@ def make_args(
         "seed_id": None,
         "seed_host": None,
         "seed_port": None,
+        "metrics_dir": None,
+        "run_id": None,
     }
 
     values.update(overrides)
@@ -129,3 +132,51 @@ def test_delivery_function_prints_message(capsys):
     assert '"peer_id": "peer-B"' in output
     assert '"topic": "estacion-central"' in output
     assert '"crime_count": 5' in output
+
+
+def test_resolve_metrics_dir_defaults_to_none():
+    args = make_args()
+
+    assert resolve_metrics_dir(args) is None
+
+
+def test_resolve_metrics_dir_prefers_explicit_flag():
+    args = make_args(
+        metrics_dir="/tmp/explicit/metrics",
+        run_id="run-1",
+    )
+
+    from pathlib import Path
+
+    assert resolve_metrics_dir(args) == Path(
+        "/tmp/explicit/metrics"
+    )
+
+
+def test_resolve_metrics_dir_from_run_id(monkeypatch):
+    from pathlib import Path
+
+    monkeypatch.setenv(
+        "CIVICMESH_RUNS", "/civicmesh-runs"
+    )
+
+    args = make_args(run_id="run-42")
+
+    assert resolve_metrics_dir(args) == Path(
+        "/civicmesh-runs"
+    ) / "run-42" / "metrics"
+
+
+def test_build_peer_uses_analytics_delivery_function_when_metrics_dir_set(
+    tmp_path,
+):
+    args = make_args(
+        metrics_dir=str(tmp_path / "metrics")
+    )
+
+    peer = build_peer(args)
+
+    assert (
+        peer.pubsub._delivery_function.__module__
+        == "civicmesh.analytics.delivery"
+    )
