@@ -67,8 +67,12 @@ distri-lab-3/
 │   │   ├── documentador.md / bug-reviewer.md / mr-reviewer.md
 │   │   └── run_ollama.sh / ollama_generate.py / apply_edits.py / parse_mr_response.py
 │   ├── analytics/
-│   │   └── run_partition_experiment.sh  # experimento de caída/partición (Sección 5.3)
-│   └── data/download_open_meteo.py
+│   │   └── run_partition_experiment.sh  # experimento de caída/partición (Compose)
+│   ├── data/download_open_meteo.py
+│   └── slurm/                # sbatch/srun para el clúster DIINF (Sección 5)
+│       ├── peers.sbatch / publishers.sbatch
+│       ├── start_peer.sh / start_publisher.sh / start_frontend.sh
+│       └── README.md            # orden de arranque, túnel SSH, experimento de caída
 ├── tests/
 │   ├── unit/
 │   └── integration/
@@ -188,6 +192,26 @@ espera, y lo revive con `docker compose up -d`. Compara
 `metrics/peer-*.jsonl` (o la tabla de convergencia del frontend)
 antes/durante/después.
 
+## Clúster DIINF (Slurm)
+
+```bash
+sinfo                                            # confirmar nombres de partición
+export CIVICMESH_RUNS=/home/$USER/civicmesh-runs
+sbatch --partition=<CPU> scripts/slurm/peers.sbatch        # -> "Submitted batch job 12345"
+export RUN_ID=12345
+sbatch --partition=<GPU> scripts/slurm/publishers.sbatch
+```
+
+2 hosts CPU corren los peers (`peers.sbatch`, 2 por host); 2 hosts GPU —solo su CPU, sin
+CUDA— corren los publicadores y el frontend (`publishers.sbatch`). Los dos jobs se
+coordinan por `$CIVICMESH_RUNS/$RUN_ID/hostfile.txt` en el shared FS (Sección 5.2/5.3 del
+enunciado), no por variables internas de Slurm entre jobs — mismo mecanismo que ya usan
+Compose/local, solo que ahí `--run-id` es `compose`/manual en vez de `$SLURM_JOB_ID`.
+
+Detalle completo (túnel SSH al frontend, cómo matar un peer individual para el
+experimento de partición vía `scancel <jobid>.<step>`, y qué quedó sin probar contra un
+clúster real) en [`scripts/slurm/README.md`](scripts/slurm/README.md).
+
 ## Agentes de IA
 
 Igual que en `distri-lab-1` (Lab 1/2 de este mismo curso), el repo corre tres agentes en
@@ -249,8 +273,8 @@ Reglas comunes a los tres agentes:
 
 ## Próximos pasos
 
-- Scripts Slurm (issue #5). La convención `$CIVICMESH_RUNS/<run_id>/metrics/`
-  ya existe (ver sección "Métricas, frontend y experimento de partición"),
-  falta el `sbatch`/`srun` que la use en el clúster DIINF.
-- Correr el experimento de caída/partición también en DIINF (Sección 8 lo
-  prefiere ahí; en Compose/local ya está cubierto).
+- Correr los scripts Slurm contra el clúster DIINF real (issue #5) y ajustar lo que
+  `sinfo`/`sacct` digan que no calza (nombres de partición, tiempos). Ver "Qué se
+  validó (y qué no)" en [`scripts/slurm/README.md`](scripts/slurm/README.md).
+- Con esa corrida real, dejar evidencia del experimento de caída/partición en DIINF
+  (Sección 8 lo prefiere ahí; en Compose/local ya está cubierto).

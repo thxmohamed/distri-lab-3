@@ -9,6 +9,14 @@ proyecto usa [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Added
 
+- `scripts/slurm/{peers,publishers}.sbatch` + `start_{peer,publisher,frontend}.sh`:
+  despliegue en el clúster DIINF (Sección 5) — 2 hosts CPU con 2 peers cada uno, 2
+  hosts GPU (solo CPU del host, sin CUDA) con publicadores + frontend, coordinados por
+  `$CIVICMESH_RUNS/$RUN_ID/hostfile.txt` en el shared FS. Cada peer es su propio `srun`
+  step para poder matarlo individualmente con `scancel <jobid>.<step>` (experimento de
+  partición, Sección 5.3 paso 7). Lógica de bootstrap (hostfile + espera al seed)
+  validada localmente simulando dos nodos; los `#SBATCH` en sí no se probaron contra un
+  clúster real (sin acceso desde este entorno) — detalle en `scripts/slurm/README.md`.
 - `civicmesh/analytics/`: capa de métricas del Rol 4 (Sección 4.4 y 5.2).
   `convergence.py` implementa `perception_gap()` (brecha percepción-realidad,
   canal subjetivo) y `peer_convergence()` (dispersión del canal objetivo
