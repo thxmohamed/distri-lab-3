@@ -208,9 +208,10 @@ coordinan por `$CIVICMESH_RUNS/$RUN_ID/hostfile.txt` en el shared FS (Sección 5
 enunciado), no por variables internas de Slurm entre jobs — mismo mecanismo que ya usan
 Compose/local, solo que ahí `--run-id` es `compose`/manual en vez de `$SLURM_JOB_ID`.
 
-Detalle completo (túnel SSH al frontend, cómo matar un peer individual para el
-experimento de partición vía `scancel <jobid>.<step>`, y qué quedó sin probar contra un
-clúster real) en [`scripts/slurm/README.md`](scripts/slurm/README.md).
+Sin VPN a DIINF, esto se corrió de punta a punta (peers + publicadores + frontend +
+experimento de partición con `scancel`) contra un `slurm-wlm` real montado en WSL2, no
+una simulación — specs de esa máquina, qué es evidencia real y qué falta correr en
+DIINF de verdad, en [`scripts/slurm/README.md`](scripts/slurm/README.md).
 
 ## Agentes de IA
 
@@ -273,8 +274,10 @@ Reglas comunes a los tres agentes:
 
 ## Próximos pasos
 
-- Correr los scripts Slurm contra el clúster DIINF real (issue #5) y ajustar lo que
-  `sinfo`/`sacct` digan que no calza (nombres de partición, tiempos). Ver "Qué se
-  validó (y qué no)" en [`scripts/slurm/README.md`](scripts/slurm/README.md).
+- Correr los scripts Slurm contra el clúster DIINF real (issue #5): ya se validaron de
+  punta a punta contra un Slurm real en local (WSL2, ver `scripts/slurm/README.md`),
+  falta la corrida "oficial" en DIINF — alguien del equipo con VPN debería repetirla y
+  ajustar lo que `sinfo`/`sacct` digan que no calza (nombres de partición, `-w
+  <hostname>` con FQDN si hace falta).
 - Con esa corrida real, dejar evidencia del experimento de caída/partición en DIINF
   (Sección 8 lo prefiere ahí; en Compose/local ya está cubierto).

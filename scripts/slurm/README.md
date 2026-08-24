@@ -4,12 +4,17 @@ Implementa la Sección 5 del enunciado: 2 hosts CPU para los peers
 (gossip + pub/sub) y 2 hosts GPU —usando **solo la CPU del host**, sin
 CUDA— para los publicadores de dominio y el frontend.
 
-No se testeó contra un clúster DIINF real (no tenemos acceso desde acá):
-los scripts están escritos y verificados sintácticamente (`bash -n`), y la
-lógica de arranque se probó localmente simulando lo que hace Slurm (ver
-sección "Qué se validó" más abajo). Los nombres de partición son
-placeholders — **correr `sinfo` primero** y ajustar o sobreescribir por
-línea de comandos.
+**No se corrió contra el clúster DIINF real** (sin VPN desde donde estoy
+trabajando). En su lugar, se corrió contra un Slurm real (mismo
+`sbatch`/`srun`/`scancel`, no una simulación) montado en mi propia
+máquina — ver "Sustituto local de DIINF" y "Qué se validó" más abajo para
+el detalle completo y las diferencias que hay que tener en cuenta.
+Alguien del equipo con acceso a DIINF debería repetir esto ahí antes de
+la entrega para tener la evidencia "oficial" que pide la Sección 8; lo
+de acá es la evidencia que se pudo conseguir mientras tanto. Los nombres
+de partición (`CPU`/`GPU`) son los que usé en mi cluster local — en DIINF
+**correr `sinfo` primero** y ajustar o sobreescribir por línea de
+comandos si no coinciden.
 
 ## Orden de arranque
 
@@ -65,10 +70,13 @@ Mapa de steps -> peer (para el experimento de caída, Sección 5.3 paso 7):
 ```
 
 Ese mapeo es best-effort (asume que Slurm asigna los step id en el orden
-en que se lanzaron los `srun`); confirmar antes de matar nada con:
+en que se lanzaron los `srun`) — se verificó correcto en la corrida local
+(ver más abajo), pero conviene confirmarlo antes de matar nada:
 
 ```bash
-sacct -j 12345 --format=JobID,NodeList,Start,State
+sacct -j 12345 --format=JobID,NodeList,Start,State   # si el clúster tiene accounting
+# o, sin accounting configurado (lo que tuve que usar yo en local):
+squeue -j 12345 -s   # -s lista los steps activos del job
 ```
 
 Luego:
@@ -84,22 +92,87 @@ la caída — igual que hace `scripts/analytics/run_partition_experiment.sh`
 en Docker Compose, pero acá con evidencia real multi-host en DIINF
 (preferido por la Sección 8 del enunciado).
 
+## Sustituto local de DIINF (Slurm real, sin VPN)
+
+Sin acceso a la VPN de DIINF, instalé `slurm-wlm` de verdad (paquete
+`slurm-wlm` 23.11.4, no un mock) dentro de WSL2 en mi laptop, configurado
+con **4 nodos Slurm "de mentira"**: `cpu-node-01`, `cpu-node-02` (partición
+`CPU`) y `gpu-node-01`, `gpu-node-02` (partición `GPU`), los 4 apuntando a
+la misma IP local (`127.0.0.1`) pero como entradas `NodeName` separadas en
+`slurm.conf` (soporte oficial de Slurm para test sin hardware real:
+"multiple slurmd"). Es un `slurmctld` + 4 `slurmd` reales, así que
+`sbatch`/`srun`/`squeue`/`scancel` corren de verdad, con la limitación
+obvia de que las 4 "máquinas" son en realidad una sola.
+
+**Specs de la máquina usada** (documentado porque reemplaza al hardware
+de DIINF para esta corrida):
+
+| | |
+|---|---|
+| CPU | AMD Ryzen 7 5700U (8 cores / 16 hilos) |
+| RAM | 13,8 GB físicos (WSL2 ve ~6,7 GiB asignados) |
+| SO host | Windows 11 Home Single Language, 64 bits (build 10.0.26200) |
+| Entorno Slurm | WSL2, Ubuntu 24.04.1 LTS, `slurm-wlm` 23.11.4, `munge` |
+
 ## Qué se validó (y qué no)
 
-- ✅ `python -m civicmesh.pubsub.run_peer` / `run_publisher` con
-  `--seed-*`, `--run-id` y `CIVICMESH_RUNS`: probado en Docker Compose
-  (`docker-compose.yml`) con 3 peers reales y reenvío multi-hop
-  confirmado (`hop_count=2` en los logs).
+- ✅ **Corrida real de punta a punta** (no simulación): `sbatch
+  scripts/slurm/peers.sbatch` → job real con 4 tasks (`srun` steps
+  independientes) en 2 nodos de la partición `CPU`; `sbatch
+  scripts/slurm/publishers.sbatch` con `RUN_ID` del job anterior → 2
+  publicadores + frontend en la partición `GPU`. Los 4 peers se
+  descubrieron por gossip (incluido descubrimiento *indirecto*, no solo
+  contacto directo con el seed), los publicadores hicieron `JOIN` y
+  publicaron delitos (`estacion-central`) y aire real de Open-Meteo
+  (`santiago`, PM2.5), y `metrics/peer-*.jsonl` quedó con snapshots
+  reales de ambos dominios y canales.
+- ✅ **Experimento de partición real**: `scancel 4.3` mató únicamente
+  `peer-1-1` (su propio `srun` step); tanto el seed como su vecino en el
+  mismo host CPU lo marcaron `DEAD` de forma independiente por timeout
+  (~10-12s, `failure_timeout` default), quedando en los logs
+  `peer-0-0.log`/`peer-1-0.log`. Evidencia directa para la Sección 5.3
+  paso 7 / Sección 11.
+- ✅ Frontend accesible por HTTP (`curl` devolvió 200) tras el fix de
+  `--server.headless` (ver más abajo).
 - ✅ Sintaxis de los 5 scripts (`bash -n`).
-- ✅ Lógica de `start_peer.sh` (registro en hostfile + espera al seed):
-  simulada en local con dos procesos en `127.0.0.1` en vez de nodos
-  Slurm reales.
-- ❌ **No probado**: los `#SBATCH` reales contra un scheduler Slurm (no
-  hay acceso al clúster DIINF desde este entorno). Antes de la entrega,
-  correr una vez de verdad y ajustar lo que `sinfo`/`sacct` digan que no
-  calza (nombres de partición, límites de tiempo, si `-w <hostname>`
-  necesita el nombre corto o el FQDN, etc.) y dejarlo como evidencia en
-  el informe (Sección 8, entregable "Mapa proceso↔nodo Slurm").
+- **Bugs reales encontrados y corregidos gracias a esta corrida** (no
+  hubieran aparecido con una simulación en bash plano, solo con Slurm
+  real repartiendo tasks):
+  - `start_peer.sh`/`start_publisher.sh` calculaban el puerto solo a
+    partir de `local_idx` (peers) o un puerto fijo (publicadores) —
+    asumía implícitamente que nodos distintos = IPs distintas. Con los 4
+    nodos falsos compartiendo `127.0.0.1`, dos peers pisaban el mismo
+    puerto y `asyncio` tiraba `OSError: address already in use`. En
+    DIINF con hosts físicos de verdad esto no debería pasar, pero
+    depender de esa asunción era frágil; ahora el puerto depende de
+    `node_idx` también (y cada dominio de publicador tiene su propio
+    puerto fijo), así que funciona sin importar si los nodos comparten
+    IP o no.
+  - `start_frontend.sh` (y el `frontend` de `docker-compose.yml`, mismo
+    bug): Streamlit muestra una pantalla de bienvenida que pide un email
+    por stdin la primera vez que corre en una máquina. Sin TTY (un
+    `srun` step, o un contenedor), el proceso moría con exit code 255.
+    Se agregó `--server.headless true`, que salta ese prompt — es el
+    flag correcto para cualquier despliegue no interactivo, no un
+    parche específico de Slurm.
+- ⚠️ **Diferencias con DIINF real que quedan sin probar**:
+  - **No es multi-host de verdad**: las 4 "máquinas" son la misma. El
+    reenvío por red (sockets TCP reales, gossip, `should_forward`) sí es
+    real, pero no hay latencia de red entre hosts físicos ni
+    posibilidad de que un nodo completo se caiga por una falla de
+    hardware/red distinta a matar el proceso.
+  - `sacct` no funciona en mi cluster (no configuré
+    `AccountingStorageType`, así que no hay base de datos de
+    contabilidad) — usé `squeue`/`scontrol show job` en su lugar. En
+    DIINF, con accounting configurado, `sacct` debería confirmar el
+    mapeo step→peer de forma más confiable que el mapeo best-effort que
+    imprime `peers.sbatch`.
+  - Nombres de partición (`CPU`/`GPU`) los elegí yo en mi `slurm.conf`
+    local — coinciden por diseño con los placeholders que ya tenían los
+    scripts, pero en DIINF hay que confirmarlos con `sinfo` igual.
+  - No se probó `-w <hostname>` con el nombre real de host de DIINF (acá
+    usé nombres cortos tipo `cpu-node-01`); si DIINF requiere FQDN habría
+    que ajustar `scontrol show hostnames` o el `-w` de los `srun`.
 
 ## Ajustar la escala del experimento
 

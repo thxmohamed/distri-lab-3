@@ -14,9 +14,18 @@ proyecto usa [Semantic Versioning](https://semver.org/lang/es/).
   hosts GPU (solo CPU del host, sin CUDA) con publicadores + frontend, coordinados por
   `$CIVICMESH_RUNS/$RUN_ID/hostfile.txt` en el shared FS. Cada peer es su propio `srun`
   step para poder matarlo individualmente con `scancel <jobid>.<step>` (experimento de
-  partición, Sección 5.3 paso 7). Lógica de bootstrap (hostfile + espera al seed)
-  validada localmente simulando dos nodos; los `#SBATCH` en sí no se probaron contra un
-  clúster real (sin acceso desde este entorno) — detalle en `scripts/slurm/README.md`.
+  partición, Sección 5.3 paso 7). Sin acceso a la VPN de DIINF, se corrió de punta a
+  punta contra un `slurm-wlm` real (no simulado) instalado en WSL2 con 4 nodos falsos
+  (misma máquina, distinto `NodeName`/puerto cada uno): los 4 peers convergieron por
+  gossip, publicadores de ambos dominios entregaron datos reales, `scancel` a un solo
+  step mató únicamente ese peer y el resto lo detectó por timeout de forma
+  independiente. Specs de la máquina usada y detalle completo (qué es evidencia real y
+  qué sigue pendiente de correr en DIINF de verdad) en `scripts/slurm/README.md`.
+- Dos bugs reales encontrados en esa corrida y corregidos: puertos de peer/publicador
+  colisionaban si dos "nodos" compartían IP (dependía implícitamente de que nodos
+  distintos = IPs distintas); el frontend (Slurm y Compose) moría con exit 255 porque
+  Streamlit pedía un email por stdin sin TTY disponible — se agregó
+  `--server.headless true`.
 - `civicmesh/analytics/`: capa de métricas del Rol 4 (Sección 4.4 y 5.2).
   `convergence.py` implementa `perception_gap()` (brecha percepción-realidad,
   canal subjetivo) y `peer_convergence()` (dispersión del canal objetivo
