@@ -12,7 +12,7 @@ def _extract_value(message: PubSubMessage):
     """
     Extrae el valor numérico relevante del payload según el canal.
 
-    Subjetivo: siempre "perception" (Sección 4.3, ambos dominios).
+    Subjetivo: siempre "perception" (ambos dominios).
     Objetivo: "count" en delitos; pm2_5 en aire (mismo contaminante
     que usa por defecto el modelo de percepción del publicador).
     """
@@ -36,8 +36,8 @@ def build_analytics_delivery_function(
     Reemplaza al delivery_function de solo-log de run_peer.py.
 
     Además de recibir el mensaje, actualiza el estado local del peer
-    y escribe un snapshot a metrics/ para que el frontend (Sección 5.4)
-    y los experimentos de partición puedan leerlo.
+    y escribe un snapshot a metrics/ para que el frontend y los
+    experimentos de partición puedan leerlo.
     """
 
     state = AnalyticsState()

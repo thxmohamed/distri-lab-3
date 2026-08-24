@@ -9,6 +9,22 @@ proyecto usa [Semantic Versioning](https://semver.org/lang/es/).
 
 ### Added
 
+- `civicmesh/analytics/`: capa de métricas del Rol 4 (Sección 4.4 y 5.2).
+  `convergence.py` implementa `perception_gap()` (brecha percepción-realidad,
+  canal subjetivo) y `peer_convergence()` (dispersión del canal objetivo
+  entre peers); `writer.py`/`delivery.py` vuelcan un snapshot JSONL por
+  mensaje entregado a `$CIVICMESH_RUNS/<run_id>/metrics/<peer_id>.jsonl`.
+  `civicmesh/pubsub/run_peer.py` lo engancha vía los flags nuevos
+  `--metrics-dir`/`--run-id` (sin ellos, comportamiento idéntico al de antes).
+- `civicmesh/frontend/app.py`: frontend mínimo (Streamlit, Sección 5.4) que
+  lee `metrics/*.jsonl` de una corrida y muestra estado por tópico × canal,
+  brecha percepción-realidad y convergencia entre peers. Agregado a
+  `docker-compose.yml` como servicio `frontend` (puerto 8501), sobre el
+  mismo volumen `./runs:/civicmesh-runs` que ahora montan los 3 peers.
+- `scripts/analytics/run_partition_experiment.sh`: experimento de
+  caída/partición (Sección 5.3 punto 7 / Sección 11) sobre Docker Compose:
+  mata un peer, espera, lo revive, y deja instrucciones de qué comparar en
+  `metrics/` y en el frontend antes/durante/después.
 - `Dockerfile` + `docker-compose.yml`: levanta 3 peers (`peer-seed`, `peer-2`, `peer-3`)
   y `publisher-crime` (Dominio A) sobre una red interna; perfil `air` agrega
   `publisher-air` (Dominio B). Verificado en local con `docker compose up --build`:

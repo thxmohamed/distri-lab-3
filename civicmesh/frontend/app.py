@@ -24,8 +24,8 @@ METRICS_COLUMNS = [
 
 def load_snapshots(metrics_dir: Path) -> pd.DataFrame:
     """
-    Lee todos los metrics/<peer_id>.jsonl de una corrida (Sección 5.2:
-    convención compartida por FS) y los junta en un único DataFrame.
+    Lee todos los metrics/<peer_id>.jsonl de una corrida (convención
+    compartida por FS) y los junta en un único DataFrame.
     """
 
     rows = []
@@ -127,7 +127,7 @@ def main() -> None:
     st.set_page_config(
         page_title="CivicMesh — Métricas", layout="wide"
     )
-    st.title("CivicMesh — Frontend de métricas (Sección 5.4)")
+    st.title("CivicMesh — Frontend de métricas")
 
     runs_root = Path(
         os.environ.get("CIVICMESH_RUNS", "./runs")

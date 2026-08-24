@@ -146,15 +146,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Puerto del peer seed.",
     )
 
-    # Analítica / métricas (Rol 4, Sección 5.2)
+    # Analítica / métricas (Rol 4)
     parser.add_argument(
         "--metrics-dir",
         default=None,
         help=(
-            "Directorio donde volcar metrics/<peer_id>.jsonl "
-            "(Sección 5.2). Tiene prioridad sobre --run-id. "
-            "Si no se indica ninguno de los dos, el peer solo "
-            "imprime los mensajes entregados por stdout."
+            "Directorio donde volcar metrics/<peer_id>.jsonl. "
+            "Tiene prioridad sobre --run-id. Si no se indica "
+            "ninguno de los dos, el peer solo imprime los "
+            "mensajes entregados por stdout."
         ),
     )
 

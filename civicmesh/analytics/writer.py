@@ -7,8 +7,8 @@ from pathlib import Path
 class MetricsWriter:
     """
     Vuelca snapshots de métricas a
-    $CIVICMESH_RUNS/<run_id>/metrics/<peer_id>.jsonl (Sección 5.2),
-    un JSON por línea para que el frontend los pueda leer en streaming.
+    $CIVICMESH_RUNS/<run_id>/metrics/<peer_id>.jsonl, un JSON por
+    línea para que el frontend los pueda leer en streaming.
     """
 
     def __init__(self, metrics_dir, peer_id: str) -> None:

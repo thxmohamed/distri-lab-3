@@ -111,9 +111,9 @@ services:
       --interval 2
     networks: [civicmesh]
 
-  # Frontend de métricas (Sección 5.4): lee metrics/*.jsonl desde el
-  # mismo volumen que los peers escriben (Sección 5.2 -- convención
-  # $CIVICMESH_RUNS/<run_id>/metrics/), no habla pub/sub ni gossip.
+  # Frontend de métricas: lee metrics/*.jsonl desde el mismo volumen
+  # que los peers escriben ($CIVICMESH_RUNS/<run_id>/metrics/), no
+  # habla pub/sub ni gossip.
   frontend:
     image: civicmesh:local
     container_name: civicmesh-frontend

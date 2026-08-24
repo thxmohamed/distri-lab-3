@@ -7,8 +7,8 @@ def perception_gap(ground_truth, perception) -> float:
     """
     Brecha percepción-realidad de un evento del canal subjetivo.
 
-    |P_c(t) - G_c(t)|, según la Sección 4.4 del enunciado: qué tan
-    lejos está lo percibido de lo objetivo en ese mismo paso.
+    |P_c(t) - G_c(t)|: qué tan lejos está lo percibido de lo
+    objetivo en ese mismo paso.
     """
 
     return abs(float(perception) - float(ground_truth))
