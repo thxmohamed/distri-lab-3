@@ -18,8 +18,13 @@ LOCAL_IDX="$4"
 
 RUN_DIR="$CIVICMESH_RUNS/$RUN_ID"
 HOSTFILE="$RUN_DIR/hostfile.txt"
+# El puerto depende de node_idx Y local_idx, no solo de local_idx: si dos
+# "nodos" llegaran a compartir una misma IP (no debería pasar en DIINF con
+# hosts físicos distintos, pero sí pasa al probar esto localmente con
+# varios NodeName de Slurm apuntando todos a 127.0.0.1) dos peers con el
+# mismo local_idx en nodos distintos igual necesitan puertos distintos.
 PEER_ID="peer-${NODE_IDX}-${LOCAL_IDX}"
-PORT=$((6001 + LOCAL_IDX))
+PORT=$((6001 + NODE_IDX * 10 + LOCAL_IDX))
 HOST="$(hostname -s)"
 
 # Append es seguro sin lock: en Linux, escrituras de una sola línea corta

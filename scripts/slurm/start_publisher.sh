@@ -12,11 +12,17 @@ SEED_HOST="$3"
 SEED_PORT="$4"
 
 HOST="$(hostname -s)"
-PORT=7001
 
+# Puerto distinto por dominio: en DIINF cada publicador corre en un host
+# GPU distinto (misma razón que start_peer.sh no puede asumir puerto fijo
+# por índice local -- si dos "nodos" llegaran a compartir IP, como pasa al
+# probar esto localmente con Slurm de un solo nodo, un puerto fijo choca).
 EXTRA_ARGS=()
 if [ "$DOMAIN" = "air" ]; then
+  PORT=7002
   EXTRA_ARGS=(--pollutant pm2_5)
+else
+  PORT=7001
 fi
 
 echo "[publisher-$DOMAIN] $HOST:$PORT, comuna=$COMMUNE, seed=$SEED_HOST:$SEED_PORT"
